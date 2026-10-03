@@ -71,11 +71,11 @@
         <h2>Roboflow Asetukset</h2>
         <div class="input-group">
           <label>Private API Key:</label>
-          <input type="text" id="rf-key" placeholder="esim. w98XyZ123...">
+          <input type="text" id="rf-key" placeholder="esim. UyNaQE5Wlsfv88kfGGpW">
         </div>
         <div class="input-group">
           <label>Projektin ID (Project ID / Slug):</label>
-          <input type="text" id="rf-project" placeholder="esim. romumetallit">
+          <input type="text" id="rf-project" placeholder="esim. scrap-1h3vq">
         </div>
         <div class="input-group">
           <label>Mallin versio (vain tunnistukseen):</label>
@@ -137,15 +137,15 @@
       showToast("Asetukset tallennettu!");
     }
 
-    // Suora siirto Roboflow Upload APIin (Blob / Multipart FormData)
-    function uploadToRoboflow(category) {
+    // Suora Base64-lähetys Roboflow Upload APIin
+    async function uploadToRoboflow(category) {
       if (!video.videoWidth) return;
 
       const apiKey = localStorage.getItem('rf_key');
       const project = localStorage.getItem('rf_project');
 
       if (!apiKey || !project) {
-        alert("Aseta ensin Roboflow API Key ja Projektin ID ratas-ikonista (⚙️)!");
+        alert("Aseta ensin Roboflow-tiedot rattaasta (⚙️)!");
         toggleSettings();
         return;
       }
@@ -156,36 +156,42 @@
         document.getElementById(`c-${category}`).innerText = counts[category];
       }
 
+      // Kaapataan kuva
       snapCanvas.width = video.videoWidth;
       snapCanvas.height = video.videoHeight;
       const ctx = snapCanvas.getContext('2d');
       ctx.drawImage(video, 0, 0);
 
+      // Muunnetaan puhtaaksi Base64-merkkijonoksi (ilman 'data:image/jpeg;base64,' etuliitettä)
+      const fullBase64 = snapCanvas.toDataURL('image/jpeg', 0.85);
+      const cleanBase64 = fullBase64.split(',')[1];
+
       showToast(`Lähetetään Roboflowhun (${category})...`);
 
-      snapCanvas.toBlob(async (blob) => {
-        const filename = `${category}_${Date.now()}.jpg`;
-        const url = `https://api.roboflow.com/dataset/${project}/upload?api_key=${apiKey}&name=${filename}&split=train&tag=${category}`;
+      const filename = `${category}_${Date.now()}.jpg`;
+      const url = `https://api.roboflow.com/dataset/${project}/upload?api_key=${apiKey}&name=${encodeURIComponent(filename)}&split=train&tag=${encodeURIComponent(category)}`;
 
-        try {
-          const res = await fetch(url, {
-            method: "POST",
-            body: blob // Lähetetään suora binäärikuva
-          });
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          body: cleanBase64
+        });
 
-          const data = await res.json();
+        const data = await res.json();
 
-          if (res.ok && (data.success || data.id)) {
-            showToast(`✅ Kuva siirretty Roboflowhun!`);
-          } else {
-            console.error("Roboflow virhe:", data);
-            alert(`Roboflow-virhe: ${data.error?.message || data.message || 'Tarkista Project ID ja API Key'}`);
-          }
-        } catch (err) {
-          console.error("Lähetysvirhe:", err);
-          alert(`Yhteysvirhe: ${err.message}`);
+        if (res.ok && (data.success || data.id || data.duplicate)) {
+          showToast(`✅ ${category} tallennettu Roboflowhun!`);
+        } else {
+          console.error("Roboflow vastaus:", data);
+          alert(`Virhe: ${JSON.stringify(data)}`);
         }
-      }, 'image/jpeg', 0.9);
+      } catch (err) {
+        console.error("Verkkovirhe:", err);
+        alert(`Yhteysvirhe: ${err.message}`);
+      }
     }
 
     // Reaaliaikainen inferenssi (Live AI)
