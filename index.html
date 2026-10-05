@@ -4,947 +4,251 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#0a0e14">
-  <title>FactoryPulse Edge Gateway & Dashboard</title>
-
-  <!-- Paho MQTT over WebSockets -kirjasto -->
+  <title>RuuviTag Pro Vibration Monitor</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
-
   <style>
     :root {
-      --bg-dark: #090d13;
-      --panel-bg: #131b26;
-      --card-bg: #1a2533;
+      --bg: #090d13;
+      --card-bg: #131b26;
+      --panel: #1a2533;
       --border: #26384d;
-      --accent-cyan: #00f0ff;
-      --accent-green: #00ff88;
-      --accent-amber: #ffaa00;
-      --accent-red: #ff3344;
-      --text-main: #f0f6fc;
-      --text-dim: #7d8e9e;
-      --font-mono: "SF Mono", "Roboto Mono", "Courier New", monospace;
-      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --cyan: #00f0ff;
+      --green: #00ff88;
+      --amber: #ffaa00;
+      --red: #ff3344;
+      --text: #f0f6fc;
+      --dim: #7d8e9e;
+      --mono: "SF Mono", "Roboto Mono", monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    body {
-      background-color: var(--bg-dark);
-      color: var(--text-main);
-      font-family: var(--font-sans);
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-      padding-bottom: 70px;
-    }
-
-    header {
-      background: var(--panel-bg);
-      border-bottom: 1px solid var(--border);
-      padding: 10px 14px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .brand h1 {
-      font-size: 0.95rem;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: var(--accent-cyan);
-    }
-
-    .conn-badges {
-      display: flex;
-      gap: 6px;
-    }
-
-    .pill {
-      font-family: var(--font-mono);
-      font-size: 0.65rem;
-      padding: 3px 6px;
-      border-radius: 4px;
-      font-weight: 700;
-      border: 1px solid var(--border);
-      background: #0d131a;
-      color: var(--text-dim);
-    }
-    .pill.online {
-      color: var(--accent-green);
-      border-color: var(--accent-green);
-      box-shadow: 0 0 6px rgba(0, 255, 136, 0.2);
-    }
-    .pill.error {
-      color: var(--accent-red);
-      border-color: var(--accent-red);
-    }
-
-    /* Pääpainikkeet & Pikaohjaus */
-    .controls-strip {
-      padding: 10px 12px;
-      display: flex;
-      gap: 8px;
-    }
-
-    .btn {
-      flex: 1;
-      padding: 12px;
-      border: none;
-      border-radius: 6px;
-      font-weight: 700;
-      font-size: 0.85rem;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      transition: all 0.2s;
-    }
-    .btn:active { transform: scale(0.98); }
-
-    .btn-ble-start { background: linear-gradient(135deg, #0088cc, var(--accent-cyan)); color: #051019; }
-    .btn-ble-stop { background: var(--accent-red); color: white; }
-    .btn-settings { flex: 0 0 44px; background: var(--panel-bg); border: 1px solid var(--border); color: var(--text-main); }
-
-    /* Tilastoyhteenveto */
-    .summary-strip {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 6px;
-      padding: 0 12px 10px 12px;
-    }
-
-    .stat-pill {
-      background: var(--panel-bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 6px 8px;
-      text-align: center;
-    }
-    .stat-pill .label { font-size: 0.6rem; color: var(--text-dim); text-transform: uppercase; }
-    .stat-pill .value { font-family: var(--font-mono); font-size: 0.9rem; font-weight: 700; color: var(--text-main); }
-
-    /* Välilehtinäkymät */
-    .view-content {
-      padding: 0 12px 12px 12px;
-      display: none;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .view-content.active { display: flex; }
-
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      transition: border-color 0.2s;
-    }
-    .card.flash { border-color: var(--accent-cyan); box-shadow: 0 0 10px rgba(0,240,255,0.15); }
-
-    .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-    }
-    .device-title { font-size: 0.95rem; font-weight: 700; }
-    .device-subtitle { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-dim); }
-
-    /* Mittaridatan esitys */
-    .metric-grid-2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-    }
-    .metric-grid-3 {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 6px;
-    }
-
-    .sub-box {
-      background: var(--panel-bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 8px;
-    }
-    .sub-box .sub-label { font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; margin-bottom: 2px; }
-    .sub-box .sub-val { font-family: var(--font-mono); font-size: 1.1rem; font-weight: 800; color: var(--text-main); }
-    .sub-box .sub-unit { font-size: 0.7rem; font-weight: normal; color: var(--text-dim); }
-
-    /* Tilatägit */
-    .status-tag {
-      display: inline-block;
-      font-family: var(--font-mono);
-      font-size: 0.7rem;
-      font-weight: 700;
-      padding: 3px 6px;
-      border-radius: 4px;
-    }
-    .status-0 { background: rgba(255, 51, 68, 0.15); color: var(--accent-red); border: 1px solid var(--accent-red); }
-    .status-1 { background: rgba(0, 255, 136, 0.15); color: var(--accent-green); border: 1px solid var(--accent-green); }
-    .status-2 { background: rgba(255, 170, 0, 0.15); color: var(--accent-amber); border: 1px solid var(--accent-amber); }
-
-    /* RSSI & Akkumittarit */
-    .bar-meter {
-      height: 4px;
-      background: #0d131a;
-      border-radius: 2px;
-      overflow: hidden;
-      margin-top: 4px;
-    }
-    .bar-meter-fill {
-      height: 100%;
-      background: var(--accent-cyan);
-      transition: width 0.3s ease;
-    }
-
-    .raw-block {
-      font-family: var(--font-mono);
-      font-size: 0.65rem;
-      background: #0c1117;
-      border: 1px solid #1c2736;
-      border-radius: 4px;
-      padding: 6px;
-      color: #8da1b5;
-      word-break: break-all;
-    }
-
-    /* Alavalikko (Navigaatiopalkki) */
-    .tab-bar {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 56px;
-      background: var(--panel-bg);
-      border-top: 1px solid var(--border);
-      display: flex;
-      z-index: 100;
-    }
-
-    .tab-item {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 3px;
-      color: var(--text-dim);
-      font-size: 0.7rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      cursor: pointer;
-      user-select: none;
-    }
-    .tab-item.active {
-      color: var(--accent-cyan);
-      border-top: 2px solid var(--accent-cyan);
-      background: rgba(0, 240, 255, 0.03);
-    }
-    .tab-item svg { width: 18px; height: 18px; fill: currentColor; }
-
-    /* Asetus-Modal */
-    .modal-backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.85);
-      backdrop-filter: blur(4px);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-      z-index: 200;
-    }
-    .modal-backdrop.open { display: flex; }
-
-    .modal-sheet {
-      background: var(--panel-bg);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      width: 100%;
-      max-width: 440px;
-      max-height: 90vh;
-      overflow-y: auto;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .modal-title {
-      font-size: 1rem;
-      font-weight: 700;
-      color: var(--accent-cyan);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .form-group {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .form-group label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; }
-    .form-group input {
-      background: #090d13;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      color: var(--text-main);
-      padding: 10px;
-      font-family: var(--font-mono);
-      font-size: 0.85rem;
-    }
-    .form-group input:focus { outline: 1px solid var(--accent-cyan); }
-
-    .alert {
-      background: rgba(255, 170, 0, 0.1);
-      border-left: 3px solid var(--accent-amber);
-      padding: 8px 10px;
-      font-size: 0.75rem;
-      color: #ffc266;
-      border-radius: 4px;
-      display: none;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: var(--sans); padding: 10px; padding-bottom: 30px; }
+    header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+    h1 { font-size: 0.95rem; text-transform: uppercase; color: var(--cyan); letter-spacing: 0.8px; }
+    .pill { font-family: var(--mono); font-size: 0.65rem; padding: 3px 6px; border-radius: 4px; border: 1px solid var(--border); background: #0d131a; }
+    .pill.online { color: var(--green); border-color: var(--green); }
+    .pill.err { color: var(--red); border-color: var(--red); }
+    .btn { width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: 700; font-size: 0.85rem; text-transform: uppercase; cursor: pointer; margin-bottom: 10px; }
+    .btn-start { background: linear-gradient(135deg, #0088cc, var(--cyan)); color: #051019; }
+    .btn-stop { background: var(--red); color: #fff; }
+    .stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px; }
+    .stat-box { background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px; text-align: center; }
+    .stat-lbl { font-size: 0.55rem; color: var(--dim); text-transform: uppercase; }
+    .stat-val { font-family: var(--mono); font-size: 0.85rem; font-weight: 700; }
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 10px; }
+    .card-header { display: flex; justify-content: space-between; align-items: flex-start; }
+    .section-title { font-size: 0.7rem; color: var(--cyan); text-transform: uppercase; margin-bottom: 4px; font-weight: 700; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .sub-box { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
+    .sub-lbl { font-size: 0.6rem; color: var(--dim); text-transform: uppercase; }
+    .sub-val { font-family: var(--mono); font-size: 1.05rem; font-weight: 800; color: var(--text); }
+    .sub-unit { font-size: 0.65rem; color: var(--dim); }
+    /* FFT Taajuuspalkit */
+    .fft-container { display: flex; gap: 2px; align-items: flex-end; height: 45px; padding: 6px 4px 2px 4px; background: #0b1017; border-radius: 4px; border: 1px solid var(--border); }
+    .fft-bar { flex: 1; background: var(--cyan); border-radius: 1px 1px 0 0; min-height: 2px; transition: height 0.2s ease; }
+    .raw-box { font-family: var(--mono); font-size: 0.6rem; background: #0a0e14; padding: 6px; border-radius: 4px; color: #8da1b5; word-break: break-all; }
   </style>
 </head>
 <body>
 
-  <!-- Yläpalkki & Yhteystilat -->
   <header>
-    <div class="brand">
-      <h1>FactoryPulse GW</h1>
-    </div>
-    <div class="conn-badges">
-      <span id="bleBadge" class="pill">BLE: ODOTTAA</span>
-      <span id="mqttBadge" class="pill">MQTT: DISCONNECTED</span>
+    <h1>Ruuvi Vibration GW</h1>
+    <div style="display:flex; gap:6px;">
+      <span id="blePill" class="pill">BLE: ODOTTAA</span>
+      <span id="mqttPill" class="pill">MQTT: --</span>
     </div>
   </header>
 
-  <!-- Varoitukset / Ohjeet -->
-  <div style="padding: 10px 12px 0 12px;">
-    <div id="appAlert" class="alert"></div>
+  <button id="scanBtn" class="btn btn-start">Aloita tärinämittaus</button>
+
+  <div class="stats-bar">
+    <div class="stat-box"><div class="stat-lbl">Laitteet</div><div id="statDevs" class="stat-val">0</div></div>
+    <div class="stat-box"><div class="stat-lbl">BLE RX</div><div id="statRx" class="stat-val">0</div></div>
+    <div class="stat-box"><div class="stat-lbl">MQTT TX</div><div id="statTx" class="stat-val">0</div></div>
+    <div class="stat-box"><div class="stat-lbl">Tila</div><div class="stat-val" style="color:var(--green)">ISO-10816</div></div>
   </div>
 
-  <!-- Pääohjaimet -->
-  <div class="controls-strip">
-    <button id="bleToggleBtn" class="btn btn-ble-start">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
-      </svg>
-      Aloita skannaus
-    </button>
-    <button id="openSettingsBtn" class="btn btn-settings" title="Asetukset">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
-      </svg>
-    </button>
-  </div>
-
-  <!-- Gateway-yhteenveto -->
-  <div class="summary-strip">
-    <div class="stat-pill">
-      <div class="label">Laitteet</div>
-      <div id="statDevices" class="value">0</div>
-    </div>
-    <div class="stat-pill">
-      <div class="label">BLE RX</div>
-      <div id="statBleRx" class="value">0</div>
-    </div>
-    <div class="stat-pill">
-      <div class="label">MQTT TX</div>
-      <div id="statMqttTx" class="value">0</div>
-    </div>
-    <div class="stat-pill">
-      <div class="label">Kokonais PPM</div>
-      <div id="statTotalPpm" class="value">0</div>
-    </div>
-  </div>
-
-  <!-- NÄKYMÄ 1: TUOTANTOJOHTAJA -->
-  <main id="viewProduction" class="view-content active">
-    <!-- Tuotantokortit generoidaan dynaamisesti tähän -->
-    <div id="emptyProd" style="text-align:center; padding:30px 10px; color:var(--text-dim); font-size:0.8rem;">
-      Ei havaittuja koneita.<br>Käynnistä skannaus tuotannon seurantaa varten.
-    </div>
-  </main>
-
-  <!-- NÄKYMÄ 2: KUNNOSSAPITOPÄÄLLIKKÖ -->
-  <main id="viewMaintenance" class="view-content">
-    <!-- Kunnossapitokortit generoidaan dynaamisesti tähän -->
-    <div id="emptyMaint" style="text-align:center; padding:30px 10px; color:var(--text-dim); font-size:0.8rem;">
-      Ei aktiivisia telemetriasolmuja.
-    </div>
-  </main>
-
-  <!-- Alavalikko -->
-  <nav class="tab-bar">
-    <div id="tabProd" class="tab-item active">
-      <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14h-2v-4h2v4zm0-6h-2V7h2v4zm4 6h-2v-8h2v8z"/></svg>
-      Tuotanto
-    </div>
-    <div id="tabMaint" class="tab-item">
-      <svg viewBox="0 0 24 24"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg>
-      Kunnossapito
-    </div>
-  </nav>
-
-  <!-- Asetus-Modal (MQTT & Gateway Parametrit) -->
-  <div id="settingsModal" class="modal-backdrop">
-    <div class="modal-sheet">
-      <div class="modal-title">
-        <span>Yhdyskäytävän Asetukset</span>
-        <button id="closeSettingsBtn" style="background:none; border:none; color:var(--text-main); font-size:1.4rem; cursor:pointer;">&times;</button>
-      </div>
-
-      <div class="form-group">
-        <label>Gateway ID</label>
-        <input type="text" id="cfgGatewayId" placeholder="Mobile-Gateway-01">
-      </div>
-
-      <div class="form-group">
-        <label>MQTT Broker Host (WebSockets)</label>
-        <input type="text" id="cfgBrokerHost" placeholder="broker.hivemq.com">
-      </div>
-
-      <div class="metric-grid-2">
-        <div class="form-group">
-          <label>WS Portti</label>
-          <input type="number" id="cfgBrokerPort" placeholder="8000">
-        </div>
-        <div class="form-group">
-          <label>Polku (Path)</label>
-          <input type="text" id="cfgBrokerPath" placeholder="/mqtt">
-        </div>
-      </div>
-
-      <div class="metric-grid-2">
-        <div class="form-group">
-          <label>Käyttäjätunnus</label>
-          <input type="text" id="cfgUsername" placeholder="valinnainen">
-        </div>
-        <div class="form-group">
-          <label>Salasana</label>
-          <input type="password" id="cfgPassword" placeholder="valinnainen">
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label>SSL / TLS (WSS)</label>
-        <select id="cfgUseSsl" style="background:#090d13; border:1px solid var(--border); color:var(--text-main); padding:10px; border-radius:6px; font-family:var(--font-mono);">
-          <option value="false">Ei (ws://)</option>
-          <option value="true" selected>Kyllä (wss://)</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label>MQTT Topiikkipohja</label>
-        <input type="text" id="cfgTopicBase" placeholder="factorypulse/telemetry">
-      </div>
-
-      <button id="saveConfigBtn" class="btn btn-ble-start" style="margin-top:10px;">Tallenna & Yhdistä</button>
-    </div>
-  </div>
+  <main id="deviceContainer"></main>
 
   <script>
-    /**
-     * FACTORYPULSE MOBILE EDGE GATEWAY & ANALYTICS
-     * Vanilla JS + Web Bluetooth Scanning API + Paho MQTT over WebSockets
-     */
-
-    // --- 1. TILA & KONFIGURAATIO ---
-    const DEFAULT_CONFIG = {
-      gatewayId: "Mobile-Gateway-" + Math.floor(1000 + Math.random() * 9000),
-      brokerHost: "broker.hivemq.com",
-      brokerPort: 8884, // HiveMQ public WSS port
-      brokerPath: "/mqtt",
-      useSsl: true,
-      username: "",
-      password: "",
-      topicBase: "factorypulse/telemetry"
-    };
-
-    let config = { ...DEFAULT_CONFIG };
-    let mqttClient = null;
-    let bleScanInstance = null;
     let isScanning = false;
-
-    let totalBlePackets = 0;
-    let totalMqttPackets = 0;
-
-    // Laitetietokanta välimuistissa: deviceId -> DataObject
+    let scanController = null;
+    let mqttClient = null;
+    let rxCount = 0, txCount = 0;
     const devices = new Map();
 
-    // DOM-viitteet
-    const bleToggleBtn = document.getElementById('bleToggleBtn');
-    const bleBadge = document.getElementById('bleBadge');
-    const mqttBadge = document.getElementById('mqttBadge');
-    const appAlert = document.getElementById('appAlert');
-    const statDevices = document.getElementById('statDevices');
-    const statBleRx = document.getElementById('statBleRx');
-    const statMqttTx = document.getElementById('statMqttTx');
-    const statTotalPpm = document.getElementById('statTotalPpm');
+    const MQTT_CONFIG = { host: "broker.hivemq.com", port: 8884, path: "/mqtt", topic: "factorypulse/vibration" };
 
-    // --- 2. ASETUSTEN HALLINTA (localStorage) ---
-    function loadConfig() {
-      const saved = localStorage.getItem('fp_gateway_cfg');
-      if (saved) {
-        try { config = { ...DEFAULT_CONFIG, ...JSON.parse(saved) }; } catch (e) { config = { ...DEFAULT_CONFIG }; }
-      }
-      // Päivitä lomakekentät
-      document.getElementById('cfgGatewayId').value = config.gatewayId;
-      document.getElementById('cfgBrokerHost').value = config.brokerHost;
-      document.getElementById('cfgBrokerPort').value = config.brokerPort;
-      document.getElementById('cfgBrokerPath').value = config.brokerPath;
-      document.getElementById('cfgUsername').value = config.username;
-      document.getElementById('cfgPassword').value = config.password;
-      document.getElementById('cfgUseSsl').value = String(config.useSsl);
-      document.getElementById('cfgTopicBase').value = config.topicBase;
-    }
-
-    function saveConfigFromUI() {
-      config.gatewayId = document.getElementById('cfgGatewayId').value.trim() || DEFAULT_CONFIG.gatewayId;
-      config.brokerHost = document.getElementById('cfgBrokerHost').value.trim() || DEFAULT_CONFIG.brokerHost;
-      config.brokerPort = parseInt(document.getElementById('cfgBrokerPort').value, 10) || 8000;
-      config.brokerPath = document.getElementById('cfgBrokerPath').value.trim() || "/mqtt";
-      config.username = document.getElementById('cfgUsername').value.trim();
-      config.password = document.getElementById('cfgPassword').value.trim();
-      config.useSsl = document.getElementById('cfgUseSsl').value === "true";
-      config.topicBase = document.getElementById('cfgTopicBase').value.trim() || DEFAULT_CONFIG.topicBase;
-
-      localStorage.setItem('fp_gateway_cfg', JSON.stringify(config));
-      initMqtt(); // Yhdistä uudella konfiguraatiolla
-      toggleModal(false);
-    }
-
-    // --- 3. MQTT OVER WEBSOCKETS INTEGRAATIO ---
     function initMqtt() {
-      if (mqttClient) {
-        try { mqttClient.disconnect(); } catch (e) {}
-      }
-
-      const clientId = config.gatewayId + "_" + Math.random().toString(16).substr(2, 6);
-      mqttBadge.textContent = "MQTT: YHDISTETÄÄN...";
-      mqttBadge.className = "pill";
-
-      mqttClient = new Paho.MQTT.Client(config.brokerHost, Number(config.brokerPort), config.brokerPath, clientId);
-
-      mqttClient.onConnectionLost = (responseObject) => {
-        mqttBadge.textContent = "MQTT: DISCONNECTED";
-        mqttBadge.className = "pill error";
-        console.warn("MQTT-yhteys katkesi:", responseObject.errorMessage);
-        setTimeout(initMqtt, 5000); // Automaattinen uudelleenyhdistys
-      };
-
-      const connectOptions = {
-        useSSL: config.useSsl,
-        timeout: 5,
-        onSuccess: () => {
-          mqttBadge.textContent = "MQTT: ONLINE";
-          mqttBadge.className = "pill online";
-          console.log("MQTT Online:", config.brokerHost);
-        },
-        onFailure: (err) => {
-          mqttBadge.textContent = "MQTT: VIRHE";
-          mqttBadge.className = "pill error";
-          console.error("MQTT-virhe:", err.errorMessage);
-        }
-      };
-
-      if (config.username) connectOptions.userName = config.username;
-      if (config.password) connectOptions.password = config.password;
-
-      try {
-        mqttClient.connect(connectOptions);
-      } catch (err) {
-        mqttBadge.textContent = "MQTT: VIRHE";
-        mqttBadge.className = "pill error";
-      }
+      const cid = "VIB_GW_" + Math.random().toString(16).substr(2,6);
+      mqttClient = new Paho.MQTT.Client(MQTT_CONFIG.host, MQTT_CONFIG.port, MQTT_CONFIG.path, cid);
+      mqttClient.connect({
+        useSSL: true, timeout: 5,
+        onSuccess: () => { document.getElementById('mqttPill').textContent = "MQTT: ONLINE"; document.getElementById('mqttPill').className = "pill online"; },
+        onFailure: () => { document.getElementById('mqttPill').textContent = "MQTT: VIRHE"; document.getElementById('mqttPill').className = "pill err"; }
+      });
     }
 
-    function publishTelemetry(payload) {
-      if (!mqttClient || !mqttClient.isConnected()) return;
-
-      const topic = `${config.topicBase}/${payload.device_id}`;
-      const message = new Paho.MQTT.Message(JSON.stringify(payload));
-      message.destinationName = topic;
-      message.qos = 0;
-      
-      try {
-        mqttClient.send(message);
-        totalMqttPackets++;
-        statMqttTx.textContent = totalMqttPackets.toLocaleString();
-      } catch (e) {
-        console.error("MQTT lähetysvirhe:", e);
-      }
-    }
-
-    // --- 4. BLE SCANNING & REAALIAIKAINEN PARSERI ---
-    async function toggleBleScan() {
+    async function toggleScan() {
       if (isScanning) {
-        stopBleScan();
+        if (scanController) scanController.stop();
+        navigator.bluetooth.removeEventListener('advertisementreceived', handleAd);
+        isScanning = false;
+        document.getElementById('blePill').textContent = "BLE: ODOTTAA";
+        document.getElementById('blePill').className = "pill";
+        document.getElementById('scanBtn').textContent = "Aloita tärinämittaus";
+        document.getElementById('scanBtn').className = "btn btn-start";
       } else {
-        startBleScan();
+        try {
+          scanController = await navigator.bluetooth.requestLEScan({ acceptAllAdvertisements: true, keepRepeatedDevices: true });
+          navigator.bluetooth.addEventListener('advertisementreceived', handleAd);
+          isScanning = true;
+          document.getElementById('blePill').textContent = "BLE: SKANNATAAN";
+          document.getElementById('blePill').className = "pill online";
+          document.getElementById('scanBtn').textContent = "Pysäytä skannaus";
+          document.getElementById('scanBtn').className = "btn btn-stop";
+        } catch (e) { alert("Virhe: " + e.message); }
       }
     }
 
-    async function startBleScan() {
-      hideAlert();
-
-      if (!navigator.bluetooth || typeof navigator.bluetooth.requestLEScan !== 'function') {
-        showAlert(
-          "<strong>Web Bluetooth Scanning puuttuu:</strong> Varmista HTTPS/localhost ja kytke asetus päälle: " +
-          "<code>chrome://flags/#enable-experimental-web-platform-features</code> (Enabled + Relaunch)."
-        );
-        return;
-      }
-
-      try {
-        bleScanInstance = await navigator.bluetooth.requestLEScan({
-          acceptAllAdvertisements: true,
-          keepRepeatedDevices: true
-        });
-
-        isScanning = true;
-        navigator.bluetooth.addEventListener('advertisementreceived', handleAdvertisement);
-
-        bleBadge.textContent = "BLE: SKANNATAAN";
-        bleBadge.className = "pill online";
-        bleToggleBtn.innerHTML = `
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"/></svg>
-          Pysäytä skannaus
-        `;
-        bleToggleBtn.className = "btn btn-ble-stop";
-      } catch (err) {
-        console.error("BLE-skannausvirhe:", err);
-        showAlert(`BLE-virhe: ${err.message || err.name}`);
-        bleBadge.textContent = "BLE: VIRHE";
-        bleBadge.className = "pill error";
-      }
-    }
-
-    function stopBleScan() {
-      if (bleScanInstance && bleScanInstance.stop) {
-        bleScanInstance.stop();
-        bleScanInstance = null;
-      }
-      navigator.bluetooth.removeEventListener('advertisementreceived', handleAdvertisement);
-      isScanning = false;
-
-      bleBadge.textContent = "BLE: ODOTTAA";
-      bleBadge.className = "pill";
-      bleToggleBtn.innerHTML = `
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
-        Aloita skannaus
-      `;
-      bleToggleBtn.className = "btn btn-ble-start";
-    }
-
-    function handleAdvertisement(event) {
-      totalBlePackets++;
-      statBleRx.textContent = totalBlePackets.toLocaleString();
-
+    function handleAd(event) {
+      rxCount++;
+      document.getElementById('statRx').textContent = rxCount;
       const deviceId = event.device.id;
-      const deviceName = event.device.name || "Seeed-XIAO-Node";
-      const rssi = event.rssi !== undefined ? event.rssi : -100;
-      const now = Date.now();
+      const name = event.device.name || "RuuviTag Pro";
+      const rssi = event.rssi || -100;
 
-      let companyIdHex = "0xFFFF";
-      let statusByte = 0x01; // Oletus: Käy
-      let pulseCount = 0;
-      let voltage = 3.3;     // Oletusjännite
-      let rawHex = "";
+      let dev = devices.get(deviceId) || {
+        id: deviceId, name, rssi,
+        temp: "--", hum: "--", pres: "--", volt: "--",
+        rmsX: 0, rmsY: 0, rmsZ: 0,
+        p2pX: 0, p2pY: 0, p2pZ: 0,
+        fftAxis: "X", fftScale: 1, fftFreq: 1344, fftBuckets: Array(16).fill(0),
+        lastFormat: "RAW", rawHex: ""
+      };
+      dev.rssi = rssi;
 
-      // Puretaan Manufacturer Data
-      if (event.manufacturerData && event.manufacturerData.size > 0) {
+      if (event.manufacturerData) {
         for (const [companyId, dataView] of event.manufacturerData.entries()) {
-          companyIdHex = "0x" + companyId.toString(16).padStart(4, "0").toUpperCase();
+          const bytes = new Uint8Array(dataView.buffer, dataView.byteOffset, dataView.byteLength);
+          dev.rawHex = Array.from(bytes).map(b => b.toString(16).padStart(2,'0').toUpperCase()).join('');
 
-          const byteArr = new Uint8Array(dataView.buffer, dataView.byteOffset, dataView.byteLength);
-          rawHex = Array.from(byteArr).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join('');
+          if (companyId === 0x0499 && dataView.byteLength > 0) {
+            const format = dataView.getUint8(0);
 
-          // 1. Tilatavu (Byte 0)
-          if (dataView.byteLength >= 1) {
-            statusByte = dataView.getUint8(0);
-          }
-          // 2. Pulssilaskuri Little-Endian (Bytes 1..4 tai Bytes 1..2)
-          if (dataView.byteLength >= 5) {
-            pulseCount = dataView.getUint32(1, true);
-          } else if (dataView.byteLength >= 3) {
-            pulseCount = dataView.getUint16(1, true);
-          }
-          // 3. Akkujännite (Byte 5, skaalaus esim. 30 = 3.0V tai raakatavu)
-          if (dataView.byteLength >= 6) {
-            voltage = (dataView.getUint8(5) / 10.0) || 3.3;
+            // 1. RAWv2 (0x05): Ympäristö & Paristo
+            if (format === 0x05) {
+              dev.lastFormat = "RAWv2 (0x05)";
+              dev.temp = (dataView.getInt16(1) * 0.005).toFixed(1);
+              dev.hum = (dataView.getUint16(3) * 0.0025).toFixed(1);
+              dev.pres = ((dataView.getUint16(5) + 50000) / 100).toFixed(1);
+              const power = dataView.getUint16(13);
+              dev.volt = (((power >>> 5) + 1600) / 1000).toFixed(2);
+            }
+            // 2. Simple Vibration (0xAC): P2P & RMS Tärinä
+            else if (format === 0xAC) {
+              dev.lastFormat = "TÄRINÄ-RMS (0xAC)";
+              dev.p2pX = (dataView.getInt16(2) / 1000).toFixed(2); // mG -> G
+              dev.p2pY = (dataView.getInt16(4) / 1000).toFixed(2);
+              dev.p2pZ = (dataView.getInt16(6) / 1000).toFixed(2);
+              dev.rmsX = (dataView.getInt16(8) / 1000).toFixed(2);
+              dev.rmsY = (dataView.getInt16(10) / 1000).toFixed(2);
+              dev.rmsZ = (dataView.getInt16(12) / 1000).toFixed(2);
+            }
+            // 3. Complex Vibration (0xAF): FFT Taajuusspektri
+            else if (format === 0xAF) {
+              dev.lastFormat = "FFT-SPEKTRI (0xAF)";
+              const axisMap = { 0: "X", 1: "Y", 2: "Z" };
+              dev.fftAxis = axisMap[dataView.getUint8(2)] || "X";
+              dev.fftScale = dataView.getUint16(3) / 256.0;
+              dev.fftFreq = dataView.getUint16(5);
+              dev.fftBuckets = [];
+              for (let i = 7; i < Math.min(23, dataView.byteLength); i++) {
+                dev.fftBuckets.push(dataView.getUint8(i));
+              }
+            }
           }
         }
       }
 
-      // Tilateksti
-      const statusMap = { 0: "STOPPED", 1: "RUNNING", 2: "ALARM" };
-      const statusText = statusMap[statusByte] || `UNKNOWN (${statusByte})`;
+      devices.set(deviceId, dev);
+      document.getElementById('statDevs').textContent = devices.size;
 
-      // Päivitetään paikallinen laitemuisti ja lasketaan johdetut mittarit (PPM / OEE)
-      const existing = devices.get(deviceId) || {
-        history: [],
-        firstSeen: now,
-        lastPulses: pulseCount,
-        ppm: 0
-      };
-
-      // Lasketaan hetkellinen nopeus (Pulses Per Minute, liukuva 30s ikkuna)
-      existing.history.push({ time: now, pulses: pulseCount });
-      const windowStart = now - 30000;
-      existing.history = existing.history.filter(h => h.time >= windowStart);
-
-      if (existing.history.length > 1) {
-        const oldest = existing.history[0];
-        const deltaPulses = pulseCount - oldest.pulses;
-        const deltaMins = (now - oldest.time) / 60000;
-        existing.ppm = deltaMins > 0 ? Math.round(deltaPulses / deltaMins) : 0;
+      // MQTT lähetys
+      if (mqttClient && mqttClient.isConnected()) {
+        const msg = new Paho.MQTT.Message(JSON.stringify(dev));
+        msg.destinationName = `${MQTT_CONFIG.topic}/${deviceId}`;
+        mqttClient.send(msg);
+        txCount++;
+        document.getElementById('statTx').textContent = txCount;
       }
 
-      const deviceData = {
-        ...existing,
-        id: deviceId,
-        name: deviceName,
-        companyIdHex,
-        rssi,
-        status: statusByte,
-        statusText,
-        pulseCount,
-        voltage,
-        rawHex,
-        lastSeen: now
-      };
-
-      devices.set(deviceId, deviceData);
-      statDevices.textContent = devices.size;
-
-      // Päivitetään yhteenlaskettu PPM
-      let totalPpm = 0;
-      devices.forEach(d => { totalPpm += (d.ppm > 0 ? d.ppm : 0); });
-      statTotalPpm.textContent = totalPpm;
-
-      // 5. MQTT VÄLITYS TAUSTAJÄRJESTELMÄÄN (JSON-hyötykuorma)
-      const mqttPayload = {
-        gateway_id: config.gatewayId,
-        device_id: deviceId,
-        device_name: deviceName,
-        timestamp: now,
-        rssi: rssi,
-        pulse_count: pulseCount,
-        ppm: deviceData.ppm,
-        status: statusByte,
-        status_text: statusText,
-        battery_volt: voltage,
-        raw_hex: rawHex
-      };
-      publishTelemetry(mqttPayload);
-
-      // 6. KÄYTTÖLIITTYMÄN PÄIVITYS (Molemmat näkymät)
-      renderProductionCard(deviceData);
-      renderMaintenanceCard(deviceData);
+      renderVibrationCard(dev);
     }
 
-    // --- 5. NÄKYMÄT & UI-RENDERÖINTI (Tuotanto & Kunnossapito) ---
-
-    // A. TUOTANTOJOHTAJAN KORTTI
-    function renderProductionCard(dev) {
-      document.getElementById('emptyProd').style.display = 'none';
-      let card = document.getElementById(`prod-card-${dev.id}`);
-
+    function renderVibrationCard(d) {
+      let card = document.getElementById(`c-${d.id}`);
       if (!card) {
         card = document.createElement('div');
-        card.id = `prod-card-${dev.id}`;
+        card.id = `c-${d.id}`;
         card.className = 'card';
-        card.innerHTML = `
-          <div class="card-header">
-            <div>
-              <div class="device-title" data-f="name">--</div>
-              <div class="device-subtitle" data-f="id">--</div>
-            </div>
-            <span class="status-tag" data-f="status-badge">--</span>
-          </div>
-          <div class="metric-grid-2">
-            <div class="sub-box">
-              <div class="sub-label">Iskut / Kappaleet</div>
-              <div class="sub-val" data-f="pulses" style="color:var(--accent-cyan)">0</div>
-            </div>
-            <div class="sub-box">
-              <div class="sub-label">Ajonopeus</div>
-              <div class="sub-val"><span data-f="ppm">0</span> <span class="sub-unit">kpl/min</span></div>
-            </div>
-          </div>
-          <div class="sub-box" style="display:flex; justify-content:space-between; align-items:center;">
-            <span class="sub-label" style="margin:0;">Laskennallinen OEE-indeksi</span>
-            <strong data-f="oee" style="font-family:var(--font-mono); color:var(--accent-green);">-- %</strong>
-          </div>
-        `;
-        document.getElementById('viewProduction').prepend(card);
+        document.getElementById('deviceContainer').prepend(card);
       }
 
-      // Lasketaan suuntaa-antava OEE käytettävyyden & nopeuden pohjalta
-      const nominalPpm = 120; // Oletus nimellisnopeudelle
-      const speedRatio = Math.min(100, Math.round((dev.ppm / nominalPpm) * 100));
-      const isRunning = dev.status === 1;
-      const oeeEstimate = isRunning ? Math.min(99, Math.max(10, Math.round(speedRatio * 0.95))) : 0;
+      // Lasketaan maksimi RMS tärinätaso
+      const maxRms = Math.max(parseFloat(d.rmsX)||0, parseFloat(d.rmsY)||0, parseFloat(d.rmsZ)||0);
+      const vibStatusColor = maxRms > 1.8 ? 'var(--red)' : (maxRms > 0.7 ? 'var(--amber)' : 'var(--green)');
+      const vibStatusText = maxRms > 1.8 ? 'HÄLYTYS (ISO)' : (maxRms > 0.7 ? 'VAROITUS' : 'NORMAALI');
 
-      card.querySelector('[data-f="name"]').textContent = dev.name;
-      card.querySelector('[data-f="id"]').textContent = `ID: ${dev.id.substring(0, 15)}...`;
-      card.querySelector('[data-f="pulses"]').textContent = dev.pulseCount.toLocaleString();
-      card.querySelector('[data-f="ppm"]').textContent = dev.ppm;
-      card.querySelector('[data-f="oee"]').textContent = `${oeeEstimate} %`;
-      card.querySelector('[data-f="oee"]').style.color = oeeEstimate > 75 ? 'var(--accent-green)' : (oeeEstimate > 40 ? 'var(--accent-amber)' : 'var(--accent-red)');
-
-      const statusTag = card.querySelector('[data-f="status-badge"]');
-      statusTag.textContent = dev.statusText;
-      statusTag.className = `status-tag status-${dev.status}`;
-
-      triggerFlash(card);
-    }
-
-    // B. KUNNOSSAPITOPÄÄLLIKÖN KORTTI
-    function renderMaintenanceCard(dev) {
-      document.getElementById('emptyMaint').style.display = 'none';
-      let card = document.getElementById(`maint-card-${dev.id}`);
-
-      if (!card) {
-        card = document.createElement('div');
-        card.id = `maint-card-${dev.id}`;
-        card.className = 'card';
-        card.innerHTML = `
-          <div class="card-header">
-            <div>
-              <div class="device-title" data-f="name">--</div>
-              <div class="device-subtitle" data-f="id">--</div>
-            </div>
-            <div style="text-align:right;">
-              <span class="status-tag" data-f="status-badge">--</span>
-              <div class="device-subtitle" data-f="lastseen" style="margin-top:2px;">--</div>
-            </div>
+      card.innerHTML = `
+        <div class="card-header">
+          <div>
+            <div style="font-weight:700; font-size:0.95rem;">${d.name}</div>
+            <div style="font-family:var(--mono); font-size:0.65rem; color:var(--dim);">RSSI: ${d.rssi} dBm | Paketti: ${d.lastFormat}</div>
           </div>
+          <span class="pill" style="color:${vibStatusColor}; border-color:${vibStatusColor};">${vibStatusText}</span>
+        </div>
 
-          <div class="metric-grid-3">
-            <div class="sub-box">
-              <div class="sub-label">Signaali (RSSI)</div>
-              <div class="sub-val" style="font-size:0.95rem;"><span data-f="rssi">--</span> <span class="sub-unit">dBm</span></div>
-              <div class="bar-meter"><div class="bar-meter-fill" data-f="rssi-bar" style="width:50%;"></div></div>
-            </div>
-            <div class="sub-box">
-              <div class="sub-label">Akku / Syöttö</div>
-              <div class="sub-val" style="font-size:0.95rem;"><span data-f="volt">--</span> <span class="sub-unit">V</span></div>
-              <div class="bar-meter"><div class="bar-meter-fill" data-f="volt-bar" style="width:80%; background:var(--accent-green);"></div></div>
-            </div>
-            <div class="sub-box">
-              <div class="sub-label">Company ID</div>
-              <div class="sub-val" data-f="cid" style="font-size:0.85rem; color:var(--text-dim); margin-top:2px;">--</div>
-            </div>
+        <div>
+          <div class="section-title">RMS Tärinävoimakkuus (ISO 10816)</div>
+          <div class="grid-3">
+            <div class="sub-box"><div class="sub-lbl">RMS X</div><div class="sub-val">${d.rmsX} <span class="sub-unit">G</span></div></div>
+            <div class="sub-box"><div class="sub-lbl">RMS Y</div><div class="sub-val">${d.rmsY} <span class="sub-unit">G</span></div></div>
+            <div class="sub-box"><div class="sub-lbl">RMS Z</div><div class="sub-val">${d.rmsZ} <span class="sub-unit">G</span></div></div>
           </div>
+        </div>
 
-          <div class="raw-block">
-            <div style="color:var(--text-dim); font-size:0.6rem; margin-bottom:2px;">RAW PAYLOAD (HEX):</div>
-            <span data-f="raw">--</span>
+        <div>
+          <div class="section-title">Huippukiihtyvyys (Peak-to-Peak)</div>
+          <div class="grid-3">
+            <div class="sub-box"><div class="sub-lbl">P2P X</div><div class="sub-val" style="color:var(--amber);">${d.p2pX} <span class="sub-unit">G</span></div></div>
+            <div class="sub-box"><div class="sub-lbl">P2P Y</div><div class="sub-val" style="color:var(--amber);">${d.p2pY} <span class="sub-unit">G</span></div></div>
+            <div class="sub-box"><div class="sub-lbl">P2P Z</div><div class="sub-val" style="color:var(--amber);">${d.p2pZ} <span class="sub-unit">G</span></div></div>
           </div>
-        `;
-        document.getElementById('viewMaintenance').prepend(card);
-      }
+        </div>
 
-      card.querySelector('[data-f="name"]').textContent = dev.name;
-      card.querySelector('[data-f="id"]').textContent = dev.id;
-      card.querySelector('[data-f="rssi"]').textContent = dev.rssi;
-      card.querySelector('[data-f="volt"]').textContent = dev.voltage.toFixed(1);
-      card.querySelector('[data-f="cid"]').textContent = dev.companyIdHex;
-      card.querySelector('[data-f="raw"]').textContent = dev.rawHex || "EMPTY";
+        <div>
+          <div class="section-title" style="display:flex; justify-content:space-between;">
+            <span>FFT Taajuusspektri (${d.fftAxis}-akseli)</span>
+            <span style="color:var(--dim); font-size:0.6rem;">0 ... ${d.fftFreq} Hz</span>
+          </div>
+          <div class="fft-container">
+            ${d.fftBuckets.map(b => `<div class="fft-bar" style="height:${Math.min(100, Math.max(4, (b / 255) * 100))}%;"></div>`).join('')}
+          </div>
+        </div>
 
-      // RSSI Bar laskenta (-100dBm = 0%, -40dBm = 100%)
-      const rssiPct = Math.max(5, Math.min(100, Math.round(((dev.rssi + 100) / 60) * 100)));
-      card.querySelector('[data-f="rssi-bar"]').style.width = `${rssiPct}%`;
+        <div class="grid-2">
+          <div class="sub-box"><div class="sub-lbl">Lämpötila</div><div class="sub-val">${d.temp} <span class="sub-unit">°C</span></div></div>
+          <div class="sub-box"><div class="sub-lbl">Paristojännite</div><div class="sub-val" style="color:var(--green)">${d.volt} <span class="sub-unit">V</span></div></div>
+        </div>
 
-      // Akkubar laskenta (2.7V = 0%, 3.3V = 100%)
-      const voltPct = Math.max(5, Math.min(100, Math.round(((dev.voltage - 2.7) / (3.3 - 2.7)) * 100)));
-      card.querySelector('[data-f="volt-bar"]').style.width = `${voltPct}%`;
-
-      const statusTag = card.querySelector('[data-f="status-badge"]');
-      statusTag.textContent = dev.statusText;
-      statusTag.className = `status-tag status-${dev.status}`;
-
-      const t = new Date(dev.lastSeen);
-      card.querySelector('[data-f="lastseen"]').textContent = `${t.toTimeString().split(' ')[0]}.${String(t.getMilliseconds()).padStart(3,'0')}`;
-
-      triggerFlash(card);
+        <div class="raw-box">RAW: ${d.rawHex}</div>
+      `;
     }
 
-    function triggerFlash(el) {
-      el.classList.add('flash');
-      clearTimeout(el._flashTimeout);
-      el._flashTimeout = setTimeout(() => el.classList.remove('flash'), 250);
-    }
-
-    function showAlert(msg) {
-      appAlert.innerHTML = msg;
-      appAlert.style.display = 'block';
-    }
-    function hideAlert() {
-      appAlert.style.display = 'none';
-      appAlert.innerHTML = '';
-    }
-
-    // --- 6. NAVIGOINTI & MODALIT ---
-    const tabProd = document.getElementById('tabProd');
-    const tabMaint = document.getElementById('tabMaint');
-    const viewProd = document.getElementById('viewProduction');
-    const viewMaint = document.getElementById('viewMaintenance');
-    const settingsModal = document.getElementById('settingsModal');
-
-    tabProd.addEventListener('click', () => {
-      tabProd.classList.add('active');
-      tabMaint.classList.remove('active');
-      viewProd.classList.add('active');
-      viewMaint.classList.remove('active');
-    });
-
-    tabMaint.addEventListener('click', () => {
-      tabMaint.classList.add('active');
-      tabProd.classList.remove('active');
-      viewMaint.classList.add('active');
-      viewProd.classList.remove('active');
-    });
-
-    function toggleModal(open) {
-      if (open) settingsModal.classList.add('open');
-      else settingsModal.classList.remove('open');
-    }
-
-    document.getElementById('openSettingsBtn').addEventListener('click', () => toggleModal(true));
-    document.getElementById('closeSettingsBtn').addEventListener('click', () => toggleModal(false));
-    document.getElementById('saveConfigBtn').addEventListener('click', saveConfigFromUI);
-    bleToggleBtn.addEventListener('click', toggleBleScan);
-
-    // Käynnistys
-    window.addEventListener('load', () => {
-      loadConfig();
-      initMqtt();
-    });
+    document.getElementById('scanBtn').addEventListener('click', toggleScan);
+    window.addEventListener('load', initMqtt);
   </script>
 </body>
 </html>
