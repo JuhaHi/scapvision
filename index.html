@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#0a0e14">
-  <title>RuuviTag Pro Vibration Monitor</title>
+  <meta name="theme-color" content="#090d14">
+  <title>FactoryPulse & Ruuvi Multi-Gateway</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
   <style>
     :root {
-      --bg: #090d13;
-      --card-bg: #131b26;
-      --panel: #1a2533;
+      --bg: #090d14;
+      --card-bg: #121924;
+      --panel: #1a2433;
       --border: #26384d;
       --cyan: #00f0ff;
       --green: #00ff88;
@@ -18,7 +18,7 @@
       --red: #ff3344;
       --text: #f0f6fc;
       --dim: #7d8e9e;
-      --mono: "SF Mono", "Roboto Mono", monospace;
+      --mono: "SF Mono", "Roboto Mono", "Courier New", monospace;
       --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -35,38 +35,44 @@
     .stat-box { background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px; text-align: center; }
     .stat-lbl { font-size: 0.55rem; color: var(--dim); text-transform: uppercase; }
     .stat-val { font-family: var(--mono); font-size: 0.85rem; font-weight: 700; }
-    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 10px; }
+    
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; }
     .card-header { display: flex; justify-content: space-between; align-items: flex-start; }
-    .section-title { font-size: 0.7rem; color: var(--cyan); text-transform: uppercase; margin-bottom: 4px; font-weight: 700; }
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .dev-title { font-weight: 700; font-size: 1rem; color: var(--text); }
+    .dev-sub { font-family: var(--mono); font-size: 0.65rem; color: var(--dim); }
+    
+    .sec-title { font-size: 0.65rem; color: var(--cyan); text-transform: uppercase; margin-bottom: 4px; font-weight: 700; }
     .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    
     .sub-box { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
     .sub-lbl { font-size: 0.6rem; color: var(--dim); text-transform: uppercase; }
-    .sub-val { font-family: var(--mono); font-size: 1.05rem; font-weight: 800; color: var(--text); }
-    .sub-unit { font-size: 0.65rem; color: var(--dim); }
-    /* FFT Taajuuspalkit */
-    .fft-container { display: flex; gap: 2px; align-items: flex-end; height: 45px; padding: 6px 4px 2px 4px; background: #0b1017; border-radius: 4px; border: 1px solid var(--border); }
-    .fft-bar { flex: 1; background: var(--cyan); border-radius: 1px 1px 0 0; min-height: 2px; transition: height 0.2s ease; }
-    .raw-box { font-family: var(--mono); font-size: 0.6rem; background: #0a0e14; padding: 6px; border-radius: 4px; color: #8da1b5; word-break: break-all; }
+    .sub-val { font-family: var(--mono); font-size: 1rem; font-weight: 800; color: var(--text); }
+    .sub-unit { font-size: 0.65rem; color: var(--dim); font-weight: normal; }
+
+    .fft-container { display: flex; gap: 2px; align-items: flex-end; height: 50px; padding: 6px 4px 2px 4px; background: #080c12; border-radius: 4px; border: 1px solid var(--border); }
+    .fft-bar { flex: 1; background: var(--cyan); border-radius: 1px 1px 0 0; min-height: 2px; }
+    
+    .raw-box { font-family: var(--mono); font-size: 0.6rem; background: #080c12; padding: 6px; border-radius: 4px; color: #8da1b5; word-break: break-all; }
   </style>
 </head>
 <body>
 
   <header>
-    <h1>Ruuvi Vibration GW</h1>
+    <h1>FactoryPulse GW</h1>
     <div style="display:flex; gap:6px;">
       <span id="blePill" class="pill">BLE: ODOTTAA</span>
       <span id="mqttPill" class="pill">MQTT: --</span>
     </div>
   </header>
 
-  <button id="scanBtn" class="btn btn-start">Aloita tärinämittaus</button>
+  <button id="scanBtn" class="btn btn-start">Aloita skannaus</button>
 
   <div class="stats-bar">
     <div class="stat-box"><div class="stat-lbl">Laitteet</div><div id="statDevs" class="stat-val">0</div></div>
     <div class="stat-box"><div class="stat-lbl">BLE RX</div><div id="statRx" class="stat-val">0</div></div>
     <div class="stat-box"><div class="stat-lbl">MQTT TX</div><div id="statTx" class="stat-val">0</div></div>
-    <div class="stat-box"><div class="stat-lbl">Tila</div><div class="stat-val" style="color:var(--green)">ISO-10816</div></div>
+    <div class="stat-box"><div class="stat-lbl">Tila</div><div class="stat-val" style="color:var(--green)">RUNNING</div></div>
   </div>
 
   <main id="deviceContainer"></main>
@@ -78,10 +84,10 @@
     let rxCount = 0, txCount = 0;
     const devices = new Map();
 
-    const MQTT_CONFIG = { host: "broker.hivemq.com", port: 8884, path: "/mqtt", topic: "factorypulse/vibration" };
+    const MQTT_CONFIG = { host: "broker.hivemq.com", port: 8884, path: "/mqtt", topic: "factorypulse/sensors" };
 
     function initMqtt() {
-      const cid = "VIB_GW_" + Math.random().toString(16).substr(2,6);
+      const cid = "FP_GW_" + Math.random().toString(16).substr(2,6);
       mqttClient = new Paho.MQTT.Client(MQTT_CONFIG.host, MQTT_CONFIG.port, MQTT_CONFIG.path, cid);
       mqttClient.connect({
         useSSL: true, timeout: 5,
@@ -97,7 +103,7 @@
         isScanning = false;
         document.getElementById('blePill').textContent = "BLE: ODOTTAA";
         document.getElementById('blePill').className = "pill";
-        document.getElementById('scanBtn').textContent = "Aloita tärinämittaus";
+        document.getElementById('scanBtn').textContent = "Aloita skannaus";
         document.getElementById('scanBtn').className = "btn btn-start";
       } else {
         try {
@@ -116,58 +122,80 @@
       rxCount++;
       document.getElementById('statRx').textContent = rxCount;
       const deviceId = event.device.id;
-      const name = event.device.name || "RuuviTag Pro";
+      const name = event.device.name || "XIAO BLE Sensor";
       const rssi = event.rssi || -100;
+      const now = Date.now();
 
       let dev = devices.get(deviceId) || {
-        id: deviceId, name, rssi,
-        temp: "--", hum: "--", pres: "--", volt: "--",
+        id: deviceId, name, rssi, type: "GENERIC",
+        temp: "--", volt: "--", hum: "--", pres: "--",
         rmsX: 0, rmsY: 0, rmsZ: 0,
         p2pX: 0, p2pY: 0, p2pZ: 0,
-        fftAxis: "X", fftScale: 1, fftFreq: 1344, fftBuckets: Array(16).fill(0),
-        lastFormat: "RAW", rawHex: ""
+        pulses: 0, statusText: "OK",
+        fftAxis: "Z", fftScale: 1, fftFreq: 672, fftBuckets: Array(16).fill(0),
+        lastSeen: now, lastFormat: "RAW", rawHex: ""
       };
-      dev.rssi = rssi;
 
-      if (event.manufacturerData) {
+      dev.rssi = rssi;
+      dev.lastSeen = now;
+      if (event.device.name) dev.name = event.device.name;
+
+      if (event.manufacturerData && event.manufacturerData.size > 0) {
         for (const [companyId, dataView] of event.manufacturerData.entries()) {
           const bytes = new Uint8Array(dataView.buffer, dataView.byteOffset, dataView.byteLength);
           dev.rawHex = Array.from(bytes).map(b => b.toString(16).padStart(2,'0').toUpperCase()).join('');
 
+          // A. RUUVITAG VIBRATION FIRMWARE (Company ID 0x0499)
           if (companyId === 0x0499 && dataView.byteLength > 0) {
-            const format = dataView.getUint8(0);
+            dev.type = "VIBRATION";
+            const fmt = dataView.getUint8(0);
 
-            // 1. RAWv2 (0x05): Ympäristö & Paristo
-            if (format === 0x05) {
+            // 1. FORMAT 0x05 (Ympäristö & Paristo)
+            if (fmt === 0x05 && dataView.byteLength >= 15) {
               dev.lastFormat = "RAWv2 (0x05)";
-              dev.temp = (dataView.getInt16(1) * 0.005).toFixed(1);
-              dev.hum = (dataView.getUint16(3) * 0.0025).toFixed(1);
-              dev.pres = ((dataView.getUint16(5) + 50000) / 100).toFixed(1);
-              const power = dataView.getUint16(13);
-              dev.volt = (((power >>> 5) + 1600) / 1000).toFixed(2);
+              dev.temp = (dataView.getInt16(1, false) * 0.005).toFixed(1);
+              dev.hum = (dataView.getUint16(3, false) * 0.0025).toFixed(1);
+              dev.pres = ((dataView.getUint16(5, false) + 50000) / 100).toFixed(1);
+              const pwr = dataView.getUint16(13, false);
+              dev.volt = (((pwr >>> 5) + 1600) / 1000).toFixed(2);
             }
-            // 2. Simple Vibration (0xAC): P2P & RMS Tärinä
-            else if (format === 0xAC) {
-              dev.lastFormat = "TÄRINÄ-RMS (0xAC)";
-              dev.p2pX = (dataView.getInt16(2) / 1000).toFixed(2); // mG -> G
-              dev.p2pY = (dataView.getInt16(4) / 1000).toFixed(2);
-              dev.p2pZ = (dataView.getInt16(6) / 1000).toFixed(2);
-              dev.rmsX = (dataView.getInt16(8) / 1000).toFixed(2);
-              dev.rmsY = (dataView.getInt16(10) / 1000).toFixed(2);
-              dev.rmsZ = (dataView.getInt16(12) / 1000).toFixed(2);
+            // 2. FORMAT 0xAC (P2P, RMS, Lämpötila ja Jännite)
+            else if (fmt === 0xAC && dataView.byteLength >= 20) {
+              dev.lastFormat = "TÄRINÄ (0xAC)";
+              // Luetaan Big-Endianina (__builtin_bswap16 koodistasi)
+              dev.p2pX = dataView.getInt16(2, false); // mG
+              dev.p2pY = dataView.getInt16(4, false);
+              dev.p2pZ = dataView.getInt16(6, false);
+              dev.rmsX = dataView.getInt16(8, false); // mG
+              dev.rmsY = dataView.getInt16(10, false);
+              dev.rmsZ = dataView.getInt16(12, false);
+              
+              // Jännite (Byte 17-18, mV) & Lämpötila (Byte 19, int8)
+              const vMv = dataView.getUint16(17, false);
+              if (vMv > 1000 && vMv < 4500) dev.volt = (vMv / 1000).toFixed(2);
+              const tC = dataView.getInt8(19);
+              if (tC !== -128) dev.temp = tC.toString();
             }
-            // 3. Complex Vibration (0xAF): FFT Taajuusspektri
-            else if (format === 0xAF) {
-              dev.lastFormat = "FFT-SPEKTRI (0xAF)";
+            // 3. FORMAT 0xAF (FFT Spektri)
+            else if (fmt === 0xAF && dataView.byteLength >= 23) {
+              dev.lastFormat = "FFT (0xAF)";
               const axisMap = { 0: "X", 1: "Y", 2: "Z" };
-              dev.fftAxis = axisMap[dataView.getUint8(2)] || "X";
-              dev.fftScale = dataView.getUint16(3) / 256.0;
-              dev.fftFreq = dataView.getUint16(5);
+              dev.fftAxis = axisMap[dataView.getUint8(2)] || "Z";
+              dev.fftScale = dataView.getUint16(3, true) || 1;
+              dev.fftFreq = dataView.getUint16(5, true) || 672;
               dev.fftBuckets = [];
-              for (let i = 7; i < Math.min(23, dataView.byteLength); i++) {
+              for (let i = 7; i < 23; i++) {
                 dev.fftBuckets.push(dataView.getUint8(i));
               }
             }
+          } 
+          // B. GENEERINEN FACTORYPULSE / PULSSIANTURI
+          else {
+            dev.type = "PULSE";
+            dev.lastFormat = `FP (0x${companyId.toString(16).toUpperCase()})`;
+            if (dataView.byteLength >= 1) dev.statusText = dataView.getUint8(0) === 1 ? "KÄY" : "SEIS";
+            if (dataView.byteLength >= 5) dev.pulses = dataView.getUint32(1, true);
+            else if (dataView.byteLength >= 3) dev.pulses = dataView.getUint16(1, true);
           }
         }
       }
@@ -175,7 +203,7 @@
       devices.set(deviceId, dev);
       document.getElementById('statDevs').textContent = devices.size;
 
-      // MQTT lähetys
+      // MQTT lähetys taustalle
       if (mqttClient && mqttClient.isConnected()) {
         const msg = new Paho.MQTT.Message(JSON.stringify(dev));
         msg.destinationName = `${MQTT_CONFIG.topic}/${deviceId}`;
@@ -184,10 +212,10 @@
         document.getElementById('statTx').textContent = txCount;
       }
 
-      renderVibrationCard(dev);
+      renderDeviceCard(dev);
     }
 
-    function renderVibrationCard(d) {
+    function renderDeviceCard(d) {
       let card = document.getElementById(`c-${d.id}`);
       if (!card) {
         card = document.createElement('div');
@@ -196,56 +224,81 @@
         document.getElementById('deviceContainer').prepend(card);
       }
 
-      // Lasketaan maksimi RMS tärinätaso
-      const maxRms = Math.max(parseFloat(d.rmsX)||0, parseFloat(d.rmsY)||0, parseFloat(d.rmsZ)||0);
-      const vibStatusColor = maxRms > 1.8 ? 'var(--red)' : (maxRms > 0.7 ? 'var(--amber)' : 'var(--green)');
-      const vibStatusText = maxRms > 1.8 ? 'HÄLYTYS (ISO)' : (maxRms > 0.7 ? 'VAROITUS' : 'NORMAALI');
+      const secAgo = Math.round((Date.now() - d.lastSeen) / 1000);
 
-      card.innerHTML = `
-        <div class="card-header">
+      if (d.type === "VIBRATION") {
+        // Tärinäanturin kortti
+        const maxRmsMg = Math.max(Math.abs(d.rmsX), Math.abs(d.rmsY), Math.abs(d.rmsZ));
+        const statusColor = maxRmsMg > 1800 ? 'var(--red)' : (maxRmsMg > 700 ? 'var(--amber)' : 'var(--green)');
+        const statusText = maxRmsMg > 1800 ? 'HÄLYTYS' : (maxRmsMg > 700 ? 'VAROITUS' : 'NORMAALI');
+
+        card.innerHTML = `
+          <div class="card-header">
+            <div>
+              <div class="dev-title">${d.name}</div>
+              <div class="dev-sub">RSSI: ${d.rssi} dBm | ${d.lastFormat} | Nähty: ${secAgo}s sitten</div>
+            </div>
+            <span class="pill" style="color:${statusColor}; border-color:${statusColor};">${statusText}</span>
+          </div>
+
           <div>
-            <div style="font-weight:700; font-size:0.95rem;">${d.name}</div>
-            <div style="font-family:var(--mono); font-size:0.65rem; color:var(--dim);">RSSI: ${d.rssi} dBm | Paketti: ${d.lastFormat}</div>
+            <div class="sec-title">RMS Tärinävoimakkuus (ISO 10816)</div>
+            <div class="grid-3">
+              <div class="sub-box"><div class="sub-lbl">RMS X</div><div class="sub-val">${d.rmsX} <span class="sub-unit">mG</span></div></div>
+              <div class="sub-box"><div class="sub-lbl">RMS Y</div><div class="sub-val">${d.rmsY} <span class="sub-unit">mG</span></div></div>
+              <div class="sub-box"><div class="sub-lbl">RMS Z</div><div class="sub-val">${d.rmsZ} <span class="sub-unit">mG</span></div></div>
+            </div>
           </div>
-          <span class="pill" style="color:${vibStatusColor}; border-color:${vibStatusColor};">${vibStatusText}</span>
-        </div>
 
-        <div>
-          <div class="section-title">RMS Tärinävoimakkuus (ISO 10816)</div>
-          <div class="grid-3">
-            <div class="sub-box"><div class="sub-lbl">RMS X</div><div class="sub-val">${d.rmsX} <span class="sub-unit">G</span></div></div>
-            <div class="sub-box"><div class="sub-lbl">RMS Y</div><div class="sub-val">${d.rmsY} <span class="sub-unit">G</span></div></div>
-            <div class="sub-box"><div class="sub-lbl">RMS Z</div><div class="sub-val">${d.rmsZ} <span class="sub-unit">G</span></div></div>
+          <div>
+            <div class="sec-title">Huippukiihtyvyys (Peak-to-Peak)</div>
+            <div class="grid-3">
+              <div class="sub-box"><div class="sub-lbl">P2P X</div><div class="sub-val" style="color:var(--amber);">${d.p2pX} <span class="sub-unit">mG</span></div></div>
+              <div class="sub-box"><div class="sub-lbl">P2P Y</div><div class="sub-val" style="color:var(--amber);">${d.p2pY} <span class="sub-unit">mG</span></div></div>
+              <div class="sub-box"><div class="sub-lbl">P2P Z</div><div class="sub-val" style="color:var(--amber);">${d.p2pZ} <span class="sub-unit">mG</span></div></div>
+            </div>
           </div>
-        </div>
 
-        <div>
-          <div class="section-title">Huippukiihtyvyys (Peak-to-Peak)</div>
-          <div class="grid-3">
-            <div class="sub-box"><div class="sub-lbl">P2P X</div><div class="sub-val" style="color:var(--amber);">${d.p2pX} <span class="sub-unit">G</span></div></div>
-            <div class="sub-box"><div class="sub-lbl">P2P Y</div><div class="sub-val" style="color:var(--amber);">${d.p2pY} <span class="sub-unit">G</span></div></div>
-            <div class="sub-box"><div class="sub-lbl">P2P Z</div><div class="sub-val" style="color:var(--amber);">${d.p2pZ} <span class="sub-unit">G</span></div></div>
+          <div>
+            <div class="sec-title" style="display:flex; justify-content:space-between;">
+              <span>FFT Taajuusspektri (${d.fftAxis}-akseli)</span>
+              <span style="color:var(--dim); font-size:0.6rem;">0 ... ${d.fftFreq} Hz</span>
+            </div>
+            <div class="fft-container">
+              ${d.fftBuckets.map(b => `<div class="fft-bar" style="height:${Math.min(100, Math.max(4, (b / 255) * 100))}%;"></div>`).join('')}
+            </div>
           </div>
-        </div>
 
-        <div>
-          <div class="section-title" style="display:flex; justify-content:space-between;">
-            <span>FFT Taajuusspektri (${d.fftAxis}-akseli)</span>
-            <span style="color:var(--dim); font-size:0.6rem;">0 ... ${d.fftFreq} Hz</span>
+          <div class="grid-2">
+            <div class="sub-box"><div class="sub-lbl">Lämpötila</div><div class="sub-val">${d.temp} <span class="sub-unit">°C</span></div></div>
+            <div class="sub-box"><div class="sub-lbl">Paristojännite</div><div class="sub-val" style="color:var(--green)">${d.volt} <span class="sub-unit">V</span></div></div>
           </div>
-          <div class="fft-container">
-            ${d.fftBuckets.map(b => `<div class="fft-bar" style="height:${Math.min(100, Math.max(4, (b / 255) * 100))}%;"></div>`).join('')}
+
+          <div class="raw-box">RAW: ${d.rawHex}</div>
+        `;
+      } else {
+        // Geneerisen FactoryPulse-pulssilaskurin kortti
+        card.innerHTML = `
+          <div class="card-header">
+            <div>
+              <div class="dev-title">${d.name}</div>
+              <div class="dev-sub">RSSI: ${d.rssi} dBm | ${d.lastFormat} | Nähty: ${secAgo}s sitten</div>
+            </div>
+            <span class="pill online">${d.statusText}</span>
           </div>
-        </div>
-
-        <div class="grid-2">
-          <div class="sub-box"><div class="sub-lbl">Lämpötila</div><div class="sub-val">${d.temp} <span class="sub-unit">°C</span></div></div>
-          <div class="sub-box"><div class="sub-lbl">Paristojännite</div><div class="sub-val" style="color:var(--green)">${d.volt} <span class="sub-unit">V</span></div></div>
-        </div>
-
-        <div class="raw-box">RAW: ${d.rawHex}</div>
-      `;
+          <div class="grid-2">
+            <div class="sub-box"><div class="sub-lbl">Pulssit / Kappaleet</div><div class="sub-val" style="color:var(--cyan)">${d.pulses.toLocaleString()}</div></div>
+            <div class="sub-box"><div class="sub-lbl">Signaali</div><div class="sub-val">${d.rssi} <span class="sub-unit">dBm</span></div></div>
+          </div>
+          <div class="raw-box">RAW: ${d.rawHex}</div>
+        `;
+      }
     }
+
+    // Päivitetään "Nähty Xs sitten" -aikaleimat sekunnin välein
+    setInterval(() => {
+      devices.forEach(d => renderDeviceCard(d));
+    }, 1000);
 
     document.getElementById('scanBtn').addEventListener('click', toggleScan);
     window.addEventListener('load', initMqtt);
