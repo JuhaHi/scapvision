@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#0d1117">
-  <title>BLE Raw Packet Logger</title>
+  <title>Ruuvi & XIAO BLE Sniffer</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -61,8 +61,8 @@
       border-radius: 4px;
       padding: 8px;
       font-family: inherit;
-      font-size: 0.65rem;
-      line-height: 1.4;
+      font-size: 0.68rem;
+      line-height: 1.45;
       white-space: pre;
       overflow-y: auto;
       resize: none;
@@ -73,8 +73,8 @@
 <body>
 
   <header>
-    <h1>BLE Raw Sniffer</h1>
-    <div id="pktCount" class="stats">Paketteja: 0 kpl</div>
+    <h1>Ruuvi / XIAO Sniffer</h1>
+    <div id="pktCount" class="stats">Ruuvi-paketteja: 0 kpl</div>
   </header>
 
   <div class="btn-group">
@@ -83,7 +83,7 @@
     <button id="clearBtn" class="btn-clear">Tyhjennä</button>
   </div>
 
-  <textarea id="logBox" readonly placeholder="Paina 'Aloita Skannaus' nähdäksesi raakadatan..."></textarea>
+  <textarea id="logBox" readonly placeholder="Paina 'Aloita Skannaus' - ainoastaan Ruuvi/XIAO-anturit (0x0499) tulostuvat tähän..."></textarea>
 
   <script>
     let isScanning = false;
@@ -113,7 +113,7 @@
           isScanning = true;
           scanBtn.textContent = "Pysäytä Skannaus";
           scanBtn.className = "btn-stop";
-          appendLog(`--- SKANNAUS ALOITETTU: ${new Date().toLocaleTimeString()} ---\n`);
+          appendLog(`--- RUUVITAG/XIAO SKANNAUS ALOITETTU: ${new Date().toLocaleTimeString()} ---\n`);
         } catch (e) {
           alert("BLE Virhe: " + e.message);
         }
@@ -121,38 +121,89 @@
     }
 
     function handleAd(event) {
+      // 1. SUODATUS: Hylätään välittömästi kaikki muut kuin Ruuvi-anturit (Company ID: 0x0499)
+      if (!event.manufacturerData || !event.manufacturerData.has(0x0499)) {
+        return; // Apple, Samsung, Google jne. jätetään huomiotta
+      }
+
+      const dataView = event.manufacturerData.get(0x0499);
+      if (!dataView || dataView.byteLength === 0) return;
+
       totalCount++;
-      pktCount.textContent = `Paketteja: ${totalCount} kpl`;
+      pktCount.textContent = `Ruuvi-paketteja: ${totalCount} kpl`;
 
       const now = new Date();
       const timeStr = `${now.toTimeString().split(' ')[0]}.${now.getMilliseconds().toString().padStart(3, '0')}`;
-      const name = event.device.name || "Tuntematon";
+      const name = event.device.name || "XIAO Ruuvi";
       const rssi = event.rssi !== undefined ? `${event.rssi}dBm` : "N/A";
       const devId = event.device.id.substring(0, 10);
 
-      let payloads = [];
+      // Muunnetaan tavut heksaksi
+      const bytes = new Uint8Array(dataView.buffer, dataView.byteOffset, dataView.byteLength);
+      const rawHex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join('');
 
-      if (event.manufacturerData && event.manufacturerData.size > 0) {
-        for (const [companyId, dataView] of event.manufacturerData.entries()) {
-          const cidHex = "0x" + companyId.toString(16).padStart(4, '0').toUpperCase();
-          const bytes = new Uint8Array(dataView.buffer, dataView.byteOffset, dataView.byteLength);
-          const rawHex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join('');
-          payloads.push(`[CID:${cidHex} LEN:${bytes.length} RAW:${rawHex}]`);
+      const fmt = dataView.getUint8(0);
+      let parsedInfo = "";
+
+      // 2. PARSINTA FORMAATIN MUKAAN
+      if (fmt === 0x05) {
+        // Ympäristö, paristo ja MAC
+        const temp = (dataView.getInt16(1, false) * 0.005).toFixed(1);
+        const hum = (dataView.getUint16(3, false) * 0.0025).toFixed(1);
+        const pres = ((dataView.getUint16(5, false) + 50000) / 100).toFixed(1);
+        const pwr = dataView.getUint16(13, false);
+        const volt = (((pwr >>> 5) + 1600) / 1000).toFixed(2);
+        
+        let macStr = "";
+        if (dataView.byteLength >= 24) {
+          const m = [];
+          for (let i = 18; i < 24; i++) m.push(dataView.getUint8(i).toString(16).padStart(2, '0').toUpperCase());
+          macStr = ` | MAC: ${m.join(':')}`;
         }
-      } else {
-        payloads.push("[EI_MANUFACTURER_DATA]");
+        parsedInfo = `[0x05 PERUSDATA] Temp: ${temp}°C | Hum: ${hum}% | Pres: ${pres}hPa | Akku: ${volt}V${macStr}`;
+      } 
+      else if (fmt === 0xAC) {
+        // Tärinätasot (RMS & P2P)
+        const p2pX = dataView.getInt16(2, false);
+        const p2pY = dataView.getInt16(4, false);
+        const p2pZ = dataView.getInt16(6, false);
+        const rmsX = dataView.getInt16(8, false);
+        const rmsY = dataView.getInt16(10, false);
+        const rmsZ = dataView.getInt16(12, false);
+        
+        const vMv = dataView.getUint16(17, false);
+        const volt = (vMv > 1000 && vMv < 4500) ? ` | Akku: ${(vMv/1000).toFixed(2)}V` : "";
+        const tC = dataView.getInt8(19);
+        const temp = (tC !== -128) ? ` | Temp: ${tC}°C` : "";
+
+        parsedInfo = `[0xAC TÄRINÄ] RMS (X=${rmsX}, Y=${rmsY}, Z=${rmsZ} mG) | P2P (X=${p2pX}, Y=${p2pY}, Z=${p2pZ} mG)${volt}${temp}`;
+      } 
+      else if (fmt === 0xAF) {
+        // FFT-Taajuusspektri
+        const axisNames = ["X-AKSELI", "Y-AKSELI", "Z-AKSELI"];
+        const axis = axisNames[dataView.getUint8(2)] || `Akseli-${dataView.getUint8(2)}`;
+        const freq = dataView.getUint16(5, true) || 672;
+        
+        const buckets = [];
+        for (let i = 7; i < Math.min(23, dataView.byteLength); i++) {
+          buckets.push(dataView.getUint8(i));
+        }
+        parsedInfo = `[0xAF FFT] ${axis} (0..${freq}Hz) | 16-Kaistaa: [${buckets.join(',')}]`;
+      } 
+      else {
+        parsedInfo = `[Tuntematon formaatti 0x${fmt.toString(16).toUpperCase()}]`;
       }
 
-      const logLine = `[${timeStr}] ${name} (${rssi}) ID:${devId} => ${payloads.join(' ')}\n`;
-      appendLog(logLine);
+      const logEntry = `[${timeStr}] ${name} (${rssi})\n  -> ${parsedInfo}\n  -> RAW: ${rawHex}\n\n`;
+      appendLog(logEntry);
     }
 
     function appendLog(text) {
       logBox.value += text;
-      logBox.scrollTop = logBox.scrollHeight; // Automaattinen vieritys pohjalle
+      logBox.scrollTop = logBox.scrollHeight;
     }
 
-    // Kopiointi leikepöydälle
+    // 1-Klikkauksen kopiointi
     copyBtn.addEventListener('click', () => {
       if (!logBox.value) return;
       navigator.clipboard.writeText(logBox.value).then(() => {
@@ -165,19 +216,17 @@
           copyBtn.style.background = "#238636";
           copyBtn.style.color = "#fff";
         }, 1500);
-      }).catch(err => {
-        // Varamenetelmä mobiilille
+      }).catch(() => {
         logBox.select();
         document.execCommand('copy');
-        alert("Teksti valittu/kopioitu!");
+        alert("Kopioitu leikepöydälle!");
       });
     });
 
-    // Tyhjennys
     clearBtn.addEventListener('click', () => {
       logBox.value = "";
       totalCount = 0;
-      pktCount.textContent = "Paketteja: 0 kpl";
+      pktCount.textContent = "Ruuvi-paketteja: 0 kpl";
     });
 
     scanBtn.addEventListener('click', toggleScan);
