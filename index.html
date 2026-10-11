@@ -3,233 +3,413 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#0d1117">
-  <title>Ruuvi & XIAO BLE Sniffer</title>
+  <meta name="theme-color" content="#090d14">
+  <title>XIAO / Ruuvi Koontinäkymä</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
   <style>
+    :root {
+      --bg: #090d14;
+      --card-bg: #121924;
+      --panel: #182230;
+      --border: #26384d;
+      --axis-x: #ff4d6d;
+      --axis-y: #00ff88;
+      --axis-z: #00f0ff;
+      --amber: #ffaa00;
+      --text: #f0f6fc;
+      --dim: #7d8e9e;
+      --mono: "SF Mono", "Roboto Mono", "Courier New", monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background-color: #0d1117;
-      color: #00ff88;
-      font-family: "SF Mono", "Roboto Mono", "Courier New", monospace;
-      padding: 10px;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-    }
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-    }
-    h1 {
-      font-size: 0.9rem;
-      color: #00f0ff;
-      text-transform: uppercase;
-    }
-    .stats {
-      font-size: 0.75rem;
-      color: #8b949e;
-    }
-    .btn-group {
-      display: flex;
-      gap: 6px;
-      margin-bottom: 8px;
-    }
-    button {
-      flex: 1;
-      padding: 12px 6px;
-      border: none;
-      border-radius: 4px;
-      font-family: inherit;
-      font-weight: bold;
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      cursor: pointer;
-    }
-    .btn-scan { background: #00f0ff; color: #0d1117; }
-    .btn-stop { background: #ff3344; color: #fff; }
-    .btn-copy { background: #238636; color: #fff; }
-    .btn-clear { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; flex: 0.6; }
+    body { background: var(--bg); color: var(--text); font-family: var(--sans); padding: 10px; padding-bottom: 40px; }
     
-    #logBox {
-      flex: 1;
-      width: 100%;
-      background: #010409;
-      color: #00ff88;
-      border: 1px solid #30363d;
-      border-radius: 4px;
-      padding: 8px;
-      font-family: inherit;
-      font-size: 0.68rem;
-      line-height: 1.45;
-      white-space: pre;
-      overflow-y: auto;
-      resize: none;
-      word-break: break-all;
-    }
+    header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+    h1 { font-size: 0.95rem; text-transform: uppercase; color: var(--axis-z); letter-spacing: 0.8px; }
+    .pill { font-family: var(--mono); font-size: 0.65rem; padding: 3px 6px; border-radius: 4px; border: 1px solid var(--border); background: #0d131a; }
+    .pill.online { color: var(--axis-y); border-color: var(--axis-y); }
+    .pill.err { color: #ff3344; border-color: #ff3344; }
+    
+    .btn-group { display: flex; gap: 8px; margin-bottom: 10px; }
+    .btn { flex: 1; padding: 12px; border: none; border-radius: 6px; font-weight: 700; font-size: 0.8rem; text-transform: uppercase; cursor: pointer; }
+    .btn-start { background: linear-gradient(135deg, #0088cc, var(--axis-z)); color: #051019; }
+    .btn-stop { background: #ff3344; color: #fff; }
+    .btn-copy-all { background: #238636; color: #fff; flex: 0.8; }
+    
+    .stats-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
+    .stat-box { background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px; text-align: center; }
+    .stat-lbl { font-size: 0.55rem; color: var(--dim); text-transform: uppercase; }
+    .stat-val { font-family: var(--mono); font-size: 0.85rem; font-weight: 700; }
+    
+    /* Anturin koontikortti */
+    .sensor-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 10px; }
+    .card-top { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #1c2736; padding-bottom: 8px; }
+    .mac-title { font-family: var(--mono); font-weight: 800; font-size: 1.05rem; color: var(--axis-z); }
+    .meta-line { font-family: var(--mono); font-size: 0.65rem; color: var(--dim); margin-top: 2px; }
+    
+    .sec-header { font-size: 0.65rem; font-family: var(--mono); text-transform: uppercase; color: var(--axis-z); font-weight: 700; display: flex; justify-content: space-between; }
+    
+    /* Ympäristöosio */
+    .env-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .env-box { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 6px; text-align: center; }
+    .env-lbl { font-size: 0.55rem; color: var(--dim); text-transform: uppercase; margin-bottom: 2px; }
+    .env-val { font-family: var(--mono); font-size: 0.95rem; font-weight: 800; }
+    .env-unit { font-size: 0.65rem; color: var(--dim); font-weight: normal; }
+
+    /* Tärinäosio */
+    .axis-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .axis-box { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
+    .axis-tag { font-size: 0.65rem; font-weight: 800; font-family: var(--mono); margin-bottom: 4px; }
+    .axis-tag.x { color: var(--axis-x); }
+    .axis-tag.y { color: var(--axis-y); }
+    .axis-tag.z { color: var(--axis-z); }
+    .rms-val { font-family: var(--mono); font-size: 1.1rem; font-weight: 800; }
+    .p2p-val { font-size: 0.65rem; color: var(--dim); font-family: var(--mono); margin-top: 2px; }
+    
+    /* FFT Spektri */
+    .fft-row { display: flex; flex-direction: column; gap: 2px; margin-bottom: 4px; }
+    .fft-meta { display: flex; justify-content: space-between; font-size: 0.6rem; font-family: var(--mono); }
+    .fft-bars { display: flex; gap: 2px; align-items: flex-end; height: 26px; padding: 2px; background: #080c12; border-radius: 4px; border: 1px solid var(--border); }
+    .fft-bar { flex: 1; border-radius: 1px 1px 0 0; min-height: 1.5px; }
+
+    .card-actions { display: flex; gap: 6px; border-top: 1px solid #1c2736; padding-top: 8px; }
+    .btn-card-copy { background: #21262d; border: 1px solid var(--border); color: #c9d1d9; padding: 6px 10px; font-size: 0.7rem; font-family: var(--mono); border-radius: 4px; cursor: pointer; flex: 1; }
   </style>
 </head>
 <body>
 
   <header>
-    <h1>Ruuvi / XIAO Sniffer</h1>
-    <div id="pktCount" class="stats">Ruuvi-paketteja: 0 kpl</div>
+    <h1>XIAO / Ruuvi Koonti</h1>
+    <div style="display:flex; gap:6px;">
+      <span id="blePill" class="pill">BLE: ODOTTAA</span>
+      <span id="mqttPill" class="pill">MQTT: --</span>
+    </div>
   </header>
 
   <div class="btn-group">
-    <button id="scanBtn" class="btn-scan">1. Aloita Skannaus</button>
-    <button id="copyBtn" class="btn-copy">2. Kopioi Kaikki</button>
-    <button id="clearBtn" class="btn-clear">Tyhjennä</button>
+    <button id="scanBtn" class="btn btn-start">Aloita Skannaus</button>
+    <button id="copyAllBtn" class="btn btn-copy-all">Kopioi Kaikki</button>
   </div>
 
-  <textarea id="logBox" readonly placeholder="Paina 'Aloita Skannaus' - ainoastaan Ruuvi/XIAO-anturit (0x0499) tulostuvat tähän..."></textarea>
+  <div class="stats-bar">
+    <div class="stat-box"><div class="stat-lbl">Anturit</div><div id="statDevs" class="stat-val">0</div></div>
+    <div class="stat-box"><div class="stat-lbl">Paketit (RX)</div><div id="statRx" class="stat-val">0</div></div>
+    <div class="stat-box"><div class="stat-lbl">MQTT (TX)</div><div id="statTx" class="stat-val">0</div></div>
+  </div>
+
+  <main id="sensorList"></main>
 
   <script>
     let isScanning = false;
     let scanController = null;
-    let totalCount = 0;
+    let mqttClient = null;
+    let rxCount = 0, txCount = 0;
+    
+    // Anturitilan koonti (keyed by Device ID tai MAC)
+    const sensors = new Map();
 
-    const scanBtn = document.getElementById('scanBtn');
-    const copyBtn = document.getElementById('copyBtn');
-    const clearBtn = document.getElementById('clearBtn');
-    const logBox = document.getElementById('logBox');
-    const pktCount = document.getElementById('pktCount');
+    const MQTT_CONFIG = { host: "broker.hivemq.com", port: 8884, path: "/mqtt", topic: "factorypulse/sensors" };
+
+    function initMqtt() {
+      const cid = "GW_AGG_" + Math.random().toString(16).substr(2,6);
+      mqttClient = new Paho.MQTT.Client(MQTT_CONFIG.host, MQTT_CONFIG.port, MQTT_CONFIG.path, cid);
+      mqttClient.connect({
+        useSSL: true, timeout: 5,
+        onSuccess: () => { document.getElementById('mqttPill').textContent = "MQTT: ONLINE"; document.getElementById('mqttPill').className = "pill online"; },
+        onFailure: () => { document.getElementById('mqttPill').textContent = "MQTT: VIRHE"; document.getElementById('mqttPill').className = "pill err"; }
+      });
+    }
 
     async function toggleScan() {
       if (isScanning) {
         if (scanController) scanController.stop();
         navigator.bluetooth.removeEventListener('advertisementreceived', handleAd);
         isScanning = false;
-        scanBtn.textContent = "Aloita Skannaus";
-        scanBtn.className = "btn-scan";
+        document.getElementById('blePill').textContent = "BLE: ODOTTAA";
+        document.getElementById('blePill').className = "pill";
+        document.getElementById('scanBtn').textContent = "Aloita Skannaus";
+        document.getElementById('scanBtn').className = "btn btn-start";
       } else {
         try {
-          scanController = await navigator.bluetooth.requestLEScan({
-            acceptAllAdvertisements: true,
-            keepRepeatedDevices: true
-          });
+          scanController = await navigator.bluetooth.requestLEScan({ acceptAllAdvertisements: true, keepRepeatedDevices: true });
           navigator.bluetooth.addEventListener('advertisementreceived', handleAd);
           isScanning = true;
-          scanBtn.textContent = "Pysäytä Skannaus";
-          scanBtn.className = "btn-stop";
-          appendLog(`--- RUUVITAG/XIAO SKANNAUS ALOITETTU: ${new Date().toLocaleTimeString()} ---\n`);
-        } catch (e) {
-          alert("BLE Virhe: " + e.message);
-        }
+          document.getElementById('blePill').textContent = "BLE: SKANNATAAN";
+          document.getElementById('blePill').className = "pill online";
+          document.getElementById('scanBtn').textContent = "Pysäytä Skannaus";
+          document.getElementById('scanBtn').className = "btn btn-stop";
+        } catch (e) { alert("BLE Virhe: " + e.message); }
       }
     }
 
     function handleAd(event) {
-      // 1. SUODATUS: Hylätään välittömästi kaikki muut kuin Ruuvi-anturit (Company ID: 0x0499)
-      if (!event.manufacturerData || !event.manufacturerData.has(0x0499)) {
-        return; // Apple, Samsung, Google jne. jätetään huomiotta
-      }
+      // Suodatetaan: Vain Ruuvi/XIAO-anturit (Company ID 0x0499)
+      if (!event.manufacturerData || !event.manufacturerData.has(0x0499)) return;
 
       const dataView = event.manufacturerData.get(0x0499);
       if (!dataView || dataView.byteLength === 0) return;
 
-      totalCount++;
-      pktCount.textContent = `Ruuvi-paketteja: ${totalCount} kpl`;
+      rxCount++;
+      document.getElementById('statRx').textContent = rxCount;
+      const deviceId = event.device.id;
+      const now = Date.now();
 
-      const now = new Date();
-      const timeStr = `${now.toTimeString().split(' ')[0]}.${now.getMilliseconds().toString().padStart(3, '0')}`;
-      const name = event.device.name || "XIAO Ruuvi";
-      const rssi = event.rssi !== undefined ? `${event.rssi}dBm` : "N/A";
-      const devId = event.device.id.substring(0, 10);
+      // Haetaan olemassa oleva anturitieto tai luodaan uusi koontiolio
+      let s = sensors.get(deviceId) || {
+        id: deviceId,
+        mac: extractMacFromName(event.device.name) || `DEV-${deviceId.substring(0,8)}`,
+        name: event.device.name || "XIAO Sensor",
+        rssi: event.rssi || -100,
+        seq: 0,
+        lastSeen: now,
+        // Ympäristö & Paristo
+        temperature: "--",
+        voltage: "--",
+        humidity: "--",
+        pressure: "--",
+        // Tärinä (RMS ja P2P)
+        rmsX: 0, rmsY: 0, rmsZ: 0, totalRms: 0,
+        p2pX: 0, p2pY: 0, p2pZ: 0,
+        // FFT 16-kanavaiset spektrit
+        fftX: Array(16).fill(0),
+        fftY: Array(16).fill(0),
+        fftZ: Array(16).fill(0),
+        fftFreq: 672,
+        packetsCount: 0
+      };
 
-      // Muunnetaan tavut heksaksi
-      const bytes = new Uint8Array(dataView.buffer, dataView.byteOffset, dataView.byteLength);
-      const rawHex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join('');
+      s.rssi = event.rssi || s.rssi;
+      s.lastSeen = now;
+      s.packetsCount++;
 
       const fmt = dataView.getUint8(0);
-      let parsedInfo = "";
 
-      // 2. PARSINTA FORMAATIN MUKAAN
-      if (fmt === 0x05) {
-        // Ympäristö, paristo ja MAC
-        const temp = (dataView.getInt16(1, false) * 0.005).toFixed(1);
-        const hum = (dataView.getUint16(3, false) * 0.0025).toFixed(1);
-        const pres = ((dataView.getUint16(5, false) + 50000) / 100).toFixed(1);
+      // --- KOONTI PAKETTITYYPIN MUKAAN ---
+
+      // 1. FORMAT 0x05: Ympäristö, Paristo, MAC ja Sekvenssinumero
+      if (fmt === 0x05 && dataView.byteLength >= 15) {
+        s.temperature = (dataView.getInt16(1, false) * 0.005).toFixed(1);
+        if (dataView.getUint16(3, false) !== 0xFFFF) s.humidity = (dataView.getUint16(3, false) * 0.0025).toFixed(1);
+        if (dataView.getUint16(5, false) !== 0xFFFF) s.pressure = ((dataView.getUint16(5, false) + 50000) / 100).toFixed(1);
         const pwr = dataView.getUint16(13, false);
-        const volt = (((pwr >>> 5) + 1600) / 1000).toFixed(2);
-        
-        let macStr = "";
+        s.voltage = (((pwr >>> 5) + 1600) / 1000).toFixed(2);
+        s.seq = dataView.getUint16(16, false);
+
         if (dataView.byteLength >= 24) {
           const m = [];
           for (let i = 18; i < 24; i++) m.push(dataView.getUint8(i).toString(16).padStart(2, '0').toUpperCase());
-          macStr = ` | MAC: ${m.join(':')}`;
+          s.mac = m.join(':');
         }
-        parsedInfo = `[0x05 PERUSDATA] Temp: ${temp}°C | Hum: ${hum}% | Pres: ${pres}hPa | Akku: ${volt}V${macStr}`;
-      } 
-      else if (fmt === 0xAC) {
-        // Tärinätasot (RMS & P2P)
-        const p2pX = dataView.getInt16(2, false);
-        const p2pY = dataView.getInt16(4, false);
-        const p2pZ = dataView.getInt16(6, false);
-        const rmsX = dataView.getInt16(8, false);
-        const rmsY = dataView.getInt16(10, false);
-        const rmsZ = dataView.getInt16(12, false);
-        
-        const vMv = dataView.getUint16(17, false);
-        const volt = (vMv > 1000 && vMv < 4500) ? ` | Akku: ${(vMv/1000).toFixed(2)}V` : "";
-        const tC = dataView.getInt8(19);
-        const temp = (tC !== -128) ? ` | Temp: ${tC}°C` : "";
-
-        parsedInfo = `[0xAC TÄRINÄ] RMS (X=${rmsX}, Y=${rmsY}, Z=${rmsZ} mG) | P2P (X=${p2pX}, Y=${p2pY}, Z=${p2pZ} mG)${volt}${temp}`;
-      } 
-      else if (fmt === 0xAF) {
-        // FFT-Taajuusspektri
-        const axisNames = ["X-AKSELI", "Y-AKSELI", "Z-AKSELI"];
-        const axis = axisNames[dataView.getUint8(2)] || `Akseli-${dataView.getUint8(2)}`;
-        const freq = dataView.getUint16(5, true) || 672;
-        
-        const buckets = [];
-        for (let i = 7; i < Math.min(23, dataView.byteLength); i++) {
-          buckets.push(dataView.getUint8(i));
-        }
-        parsedInfo = `[0xAF FFT] ${axis} (0..${freq}Hz) | 16-Kaistaa: [${buckets.join(',')}]`;
-      } 
-      else {
-        parsedInfo = `[Tuntematon formaatti 0x${fmt.toString(16).toUpperCase()}]`;
       }
 
-      const logEntry = `[${timeStr}] ${name} (${rssi})\n  -> ${parsedInfo}\n  -> RAW: ${rawHex}\n\n`;
-      appendLog(logEntry);
+      // 2. FORMAT 0xAC: Tärinätasot (RMS & P2P) + Varalämpö/jännite
+      else if (fmt === 0xAC && dataView.byteLength >= 20) {
+        s.p2pX = dataView.getInt16(2, false);
+        s.p2pY = dataView.getInt16(4, false);
+        s.p2pZ = dataView.getInt16(6, false);
+        s.rmsX = dataView.getInt16(8, false);
+        s.rmsY = dataView.getInt16(10, false);
+        s.rmsZ = dataView.getInt16(12, false);
+        s.totalRms = Math.round(Math.hypot(s.rmsX, s.rmsY, s.rmsZ));
+
+        const vMv = dataView.getUint16(17, false);
+        if (vMv > 1000 && vMv < 4500) s.voltage = (vMv / 1000).toFixed(2);
+        const tC = dataView.getInt8(19);
+        if (tC !== -128 && s.temperature === "--") s.temperature = tC.toFixed(1);
+      }
+
+      // 3. FORMAT 0xAF: FFT Spektri (X, Y tai Z)
+      else if (fmt === 0xAF && dataView.byteLength >= 23) {
+        const axis = dataView.getUint8(2);
+        s.fftFreq = dataView.getUint16(5, true) || 672;
+        const buckets = [];
+        for (let i = 7; i < 23; i++) buckets.push(dataView.getUint8(i));
+
+        if (axis === 0) s.fftX = buckets;
+        else if (axis === 1) s.fftY = buckets;
+        else if (axis === 2) s.fftZ = buckets;
+      }
+
+      sensors.set(deviceId, s);
+      document.getElementById('statDevs').textContent = sensors.size;
+
+      // Lähetetään koontitieto MQTT-brokerille
+      if (mqttClient && mqttClient.isConnected()) {
+        const msg = new Paho.MQTT.Message(JSON.stringify(s));
+        msg.destinationName = `${MQTT_CONFIG.topic}/${s.mac.replace(/:/g, '')}`;
+        mqttClient.send(msg);
+        txCount++;
+        document.getElementById('statTx').textContent = txCount;
+      }
+
+      renderSensorCard(s);
     }
 
-    function appendLog(text) {
-      logBox.value += text;
-      logBox.scrollTop = logBox.scrollHeight;
+    function extractMacFromName(name) {
+      if (!name) return null;
+      const parts = name.split(' ');
+      if (parts[1] && parts[1].length === 4) {
+        return `MAC: ..:..:..:..:${parts[1].substring(0,2)}:${parts[1].substring(2,4)}`;
+      }
+      return null;
     }
 
-    // 1-Klikkauksen kopiointi
-    copyBtn.addEventListener('click', () => {
-      if (!logBox.value) return;
-      navigator.clipboard.writeText(logBox.value).then(() => {
-        const orig = copyBtn.textContent;
-        copyBtn.textContent = "✓ KOPIOITU!";
-        copyBtn.style.background = "#00f0ff";
-        copyBtn.style.color = "#000";
-        setTimeout(() => {
-          copyBtn.textContent = orig;
-          copyBtn.style.background = "#238636";
-          copyBtn.style.color = "#fff";
-        }, 1500);
-      }).catch(() => {
-        logBox.select();
-        document.execCommand('copy');
-        alert("Kopioitu leikepöydälle!");
+    function renderSensorCard(s) {
+      let card = document.getElementById(`card-${s.id}`);
+      if (!card) {
+        card = document.createElement('div');
+        card.id = `card-${s.id}`;
+        card.className = 'sensor-card';
+        document.getElementById('sensorList').prepend(card);
+      }
+
+      const secAgo = Math.round((Date.now() - s.lastSeen) / 1000);
+
+      card.innerHTML = `
+        <div class="card-top">
+          <div>
+            <div class="mac-title">${s.mac}</div>
+            <div class="meta-line">Malli: ${s.name} | RSSI: ${s.rssi} dBm | Kierros: #${s.seq}</div>
+          </div>
+          <span class="pill online">${secAgo}s sitten</span>
+        </div>
+
+        <!-- 1. YMPÄRISTÖ JA TILA -->
+        <div>
+          <div class="sec-header" style="margin-bottom:4px;">1. Lämpötila & Ympäristö</div>
+          <div class="env-grid">
+            <div class="env-box">
+              <div class="env-lbl">Lämpötila</div>
+              <div class="env-val" style="color:var(--axis-y)">${s.temperature} <span class="env-unit">°C</span></div>
+            </div>
+            <div class="env-box">
+              <div class="env-lbl">Paristo</div>
+              <div class="env-val" style="color:var(--axis-z)">${s.voltage} <span class="env-unit">V</span></div>
+            </div>
+            <div class="env-box">
+              <div class="env-lbl">Kosteus</div>
+              <div class="env-val">${s.humidity} <span class="env-unit">%</span></div>
+            </div>
+            <div class="env-box">
+              <div class="env-lbl">Ilmanpaine</div>
+              <div class="env-val">${s.pressure} <span class="env-unit">hPa</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. TÄRINÄTASOT (RMS & P2P) -->
+        <div>
+          <div class="sec-header" style="margin-bottom:4px;">
+            <span>2. Tärinä (RMS & Peak-to-Peak)</span>
+            <span style="color:var(--axis-y)">Kokonaistaso: ${s.totalRms} mG</span>
+          </div>
+          <div class="axis-grid">
+            <div class="axis-box">
+              <div class="axis-tag x">X-AKSELI</div>
+              <div class="rms-val" style="color:var(--axis-x)">${s.rmsX} <span style="font-size:0.65rem; color:var(--dim)">mG</span></div>
+              <div class="p2p-val">P2P: ${s.p2pX} mG</div>
+            </div>
+            <div class="axis-box">
+              <div class="axis-tag y">Y-AKSELI</div>
+              <div class="rms-val" style="color:var(--axis-y)">${s.rmsY} <span style="font-size:0.65rem; color:var(--dim)">mG</span></div>
+              <div class="p2p-val">P2P: ${s.p2pY} mG</div>
+            </div>
+            <div class="axis-box">
+              <div class="axis-tag z">Z-AKSELI</div>
+              <div class="rms-val" style="color:var(--axis-z)">${s.rmsZ} <span style="font-size:0.65rem; color:var(--dim)">mG</span></div>
+              <div class="p2p-val">P2P: ${s.p2pZ} mG</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. FFT TAAJUUSSPEKTRIT -->
+        <div>
+          <div class="sec-header" style="margin-bottom:4px;">
+            <span>3. 3D FFT Spektrit (16 Kaistaa)</span>
+            <span>0 .. ${s.fftFreq} Hz</span>
+          </div>
+          
+          <div class="fft-row">
+            <div class="fft-meta"><span style="color:var(--axis-x)">X-Akseli</span></div>
+            <div class="fft-bars">
+              ${s.fftX.map(b => `<div class="fft-bar" style="background:var(--axis-x); height:${Math.min(100, Math.max(4, (b/255)*100))}%;"></div>`).join('')}
+            </div>
+          </div>
+          <div class="fft-row">
+            <div class="fft-meta"><span style="color:var(--axis-y)">Y-Akseli</span></div>
+            <div class="fft-bars">
+              ${s.fftY.map(b => `<div class="fft-bar" style="background:var(--axis-y); height:${Math.min(100, Math.max(4, (b/255)*100))}%;"></div>`).join('')}
+            </div>
+          </div>
+          <div class="fft-row">
+            <div class="fft-meta"><span style="color:var(--axis-z)">Z-Akseli</span></div>
+            <div class="fft-bars">
+              ${s.fftZ.map(b => `<div class="fft-bar" style="background:var(--axis-z); height:${Math.min(100, Math.max(4, (b/255)*100))}%;"></div>`).join('')}
+            </div>
+          </div>
+        </div>
+
+        <div class="card-actions">
+          <button class="btn-card-copy" onclick="copySensorSummary('${s.id}')">Kopioi tämän anturin koonti</button>
+        </div>
+      `;
+    }
+
+    // Yksittäisen anturin koontitekstin kopiointi
+    window.copySensorSummary = function(id) {
+      const s = sensors.get(id);
+      if (!s) return;
+      const text = 
+`--- ANTURIN KOONTI: ${s.mac} ---
+Malli: ${s.name} | RSSI: ${s.rssi} dBm | Kierros: #${s.seq}
+1. YMPÄRISTÖ & PARISTO:
+   Lämpötila: ${s.temperature} °C
+   Paristo:   ${s.voltage} V
+   Kosteus:   ${s.humidity} %
+   Ilmanpaine:${s.pressure} hPa
+
+2. TÄRINÄTASOT:
+   Kokonais-RMS: ${s.totalRms} mG
+   RMS X: ${s.rmsX} mG | P2P X: ${s.p2pX} mG
+   RMS Y: ${s.rmsY} mG | P2P Y: ${s.p2pY} mG
+   RMS Z: ${s.rmsZ} mG | P2P Z: ${s.p2pZ} mG
+
+3. FFT TAAJUUSKAISTAT (0..${s.fftFreq} Hz):
+   X: [${s.fftX.join(', ')}]
+   Y: [${s.fftY.join(', ')}]
+   Z: [${s.fftZ.join(', ')}]
+-----------------------------------------`;
+      navigator.clipboard.writeText(text).then(() => alert(`Koonti kopioitu: ${s.mac}!`));
+    };
+
+    // Kaikkien antureiden koontitekstin kopiointi
+    document.getElementById('copyAllBtn').addEventListener('click', () => {
+      if (sensors.size === 0) {
+        alert("Ei vielä vastaanotettuja antureita!");
+        return;
+      }
+      let allText = `=== FACTORYPULSE KOONTIRAPORTTI (${new Date().toLocaleString()}) ===\n\n`;
+      sensors.forEach(s => {
+        allText += 
+`[${s.mac}] (${s.name}, RSSI: ${s.rssi} dBm, Seq: #${s.seq})
+- Lämpötila: ${s.temperature} °C | Paristo: ${s.voltage} V | Kosteus: ${s.humidity} %
+- Tärinä (RMS): X=${s.rmsX} mG, Y=${s.rmsY} mG, Z=${s.rmsZ} mG (Kokonais: ${s.totalRms} mG)
+- Tärinä (P2P): X=${s.p2pX} mG, Y=${s.p2pY} mG, Z=${s.p2pZ} mG
+- FFT X: [${s.fftX.join(',')}]
+- FFT Y: [${s.fftY.join(',')}]
+- FFT Z: [${s.fftZ.join(',')}]
+\n`;
       });
+      navigator.clipboard.writeText(allText).then(() => alert("Kaikkien antureiden koonti kopioitu leikepöydälle!"));
     });
 
-    clearBtn.addEventListener('click', () => {
-      logBox.value = "";
-      totalCount = 0;
-      pktCount.textContent = "Ruuvi-paketteja: 0 kpl";
-    });
+    // Päivitetään "Xs sitten" -laskurit joka sekunti
+    setInterval(() => {
+      sensors.forEach(s => renderSensorCard(s));
+    }, 1000);
 
-    scanBtn.addEventListener('click', toggleScan);
+    document.getElementById('scanBtn').addEventListener('click', toggleScan);
+    window.addEventListener('load', initMqtt);
   </script>
 </body>
 </html>
